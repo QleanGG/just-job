@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCVFromUrl } from "@/lib/gog";
-import { upsertCv } from "@/db/database";
+import { upsertCv } from "@/lib/supabase";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 

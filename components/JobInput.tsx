@@ -14,6 +14,8 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
   const [mode, setMode] = useState<InputMode>("url");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
+  const [title, setTitle] = useState("");
+  const [company, setCompany] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<JobListing | null>(null);
@@ -23,9 +25,15 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
       setError("Enter a job listing URL");
       return;
     }
-    if (mode === "text" && !text.trim()) {
-      setError("Paste a job description");
-      return;
+    if (mode === "text") {
+      if (!title.trim()) {
+        setError("Enter a job title");
+        return;
+      }
+      if (!text.trim()) {
+        setError("Paste a job description");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -33,19 +41,31 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
     setPreview(null);
 
     try {
-      const body = mode === "url" ? { url } : { text };
-      const res = await fetch("/api/job/scrape", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      let data: JobListing;
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to fetch job");
+      if (mode === "url") {
+        const res = await fetch("/api/job/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to fetch job");
+        }
+
+        data = await res.json();
+      } else {
+        // Use separate title, company, and description fields
+        data = {
+          title: title.trim(),
+          company: company.trim(),
+          description: text.trim(),
+          source: "manual",
+        };
       }
 
-      const data: JobListing = await res.json();
       setPreview(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load job");
@@ -63,7 +83,7 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
       {/* Mode Toggle */}
       <div className="flex bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
         <button
-          onClick={() => { setMode("url"); setPreview(null); setError(""); }}
+          onClick={() => { setMode("url"); setPreview(null); setError(""); setTitle(""); setCompany(""); setText(""); }}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
             mode === "url"
               ? "bg-[var(--color-bg)] text-[var(--color-text)]"
@@ -73,7 +93,7 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
           Job URL
         </button>
         <button
-          onClick={() => { setMode("text"); setPreview(null); setError(""); }}
+          onClick={() => { setMode("text"); setPreview(null); setError(""); setUrl(""); }}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
             mode === "text"
               ? "bg-[var(--color-bg)] text-[var(--color-text)]"
@@ -105,12 +125,34 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
         ) : (
           <>
             <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
+              Job Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Technical Product Manager"
+              className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors mb-4"
+            />
+
+            <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
+              Company
+            </label>
+            <input
+              type="text"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="e.g. Google"
+              className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors mb-4"
+            />
+
+            <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
               Job Description
             </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Paste the job title, company, and full job description…"
+              placeholder="Paste the full job description here…"
               rows={8}
               className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors resize-none"
             />

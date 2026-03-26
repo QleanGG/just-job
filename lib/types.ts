@@ -31,6 +31,11 @@ export interface TailoredSection extends CVSection {
   changes: SectionChange[];
 }
 
+export interface KeywordAnalysisSummary {
+  matchedKeywords: string[];
+  missedKeywords: string[];
+}
+
 export interface ParseResult {
   sections: CVSection[];
   rawText: string;
@@ -38,11 +43,14 @@ export interface ParseResult {
 
 export interface TailorResult {
   tailoredSections: TailoredSection[];
+  keywordAnalysis: KeywordAnalysisSummary;
 }
 
 export interface ExportResult {
   newDocUrl: string;
   title: string;
+  revisionId: string | null;
+  revisionNumber: number | null;
 }
 
 export interface Job {
@@ -52,8 +60,9 @@ export interface Job {
   job_title: string;
   job_company: string | null;
   job_description: string | null;
-  status: "draft" | "tailoring" | "done";
+  status: "draft" | "tailoring" | "done" | "failed";
   tailored_cv_url: string | null;
+  last_error: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createDocFromContent } from "@/lib/gog";
-import { updateJob } from "@/db/database";
+import { updateJob } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getJobById, updateJob, deleteJob } from "@/db/database";
+import { getJobById, updateJob, deleteJob } from "@/lib/supabase";
 
 export async function GET(
   request: NextRequest,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateJob } from "@/db/database";
+import { updateJob } from "@/lib/supabase";
 
 // This API route talks to ME (Crash) via the OpenClaw Gateway
 

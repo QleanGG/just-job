@@ -1,23 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { CV } from "@/lib/supabase";
 import { CVSection } from "@/lib/types";
 
 interface CVInputProps {
   initialUrl: string;
   onUrlChange: (url: string) => void;
   onCVLoaded: (sections: CVSection[], cvId?: string) => void;
+  onPresetSaved?: (preset: {
+    cvId: string;
+    displayName: string;
+    docUrl: string;
+    sections: CVSection[];
+  }) => void;
 }
 
 export default function CVInput({
   initialUrl,
   onUrlChange,
   onCVLoaded,
+  onPresetSaved,
 }: CVInputProps) {
   const [url, setUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<CVSection[] | null>(null);
+  const [savedCvId, setSavedCvId] = useState("");
+  const [presetSaved, setPresetSaved] = useState(false);
+
+  useEffect(() => {
+    setUrl(initialUrl);
+  }, [initialUrl]);
 
   const handleFetch = async () => {
     if (!url.trim()) {
@@ -28,6 +43,8 @@ export default function CVInput({
     setIsLoading(true);
     setError("");
     setPreview(null);
+    setSavedCvId("");
+    setPresetSaved(false);
 
     try {
       const res = await fetch("/api/cv/parse", {
@@ -44,8 +61,7 @@ export default function CVInput({
       const data = await res.json();
       setPreview(data.sections);
       if (data.cvId) {
-        setPreview(prev => prev); // keep preview, pass cvId on confirm
-        (window as any).__cvId = data.cvId;
+        setSavedCvId(data.cvId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load CV");
@@ -57,8 +73,47 @@ export default function CVInput({
   const handleConfirm = () => {
     if (preview) {
       onUrlChange(url);
-      const savedCvId = (window as any).__cvId;
-      onCVLoaded(preview, savedCvId);
+      onCVLoaded(preview, savedCvId || undefined);
+    }
+  };
+
+  const handleSavePreset = async () => {
+    if (!preview || !savedCvId) {
+      setError("Load the CV first");
+      return;
+    }
+
+    setIsSavingPreset(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/cv", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: savedCvId,
+          isPreset: true,
+          displayName: "My Resume",
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as CV | { error?: string } | null;
+      if (!res.ok) {
+        throw new Error((data as { error?: string } | null)?.error || "Failed to save preset");
+      }
+
+      setPresetSaved(true);
+      onUrlChange(url);
+      onPresetSaved?.({
+        cvId: savedCvId,
+        displayName: (data as CV).display_name || "My Resume",
+        docUrl: url,
+        sections: preview,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save preset");
+    } finally {
+      setIsSavingPreset(false);
     }
   };
 
@@ -107,16 +162,37 @@ export default function CVInput({
               </div>
             ))}
           </div>
+          {presetSaved && (
+            <p className="mt-4 text-xs text-[var(--color-text-muted)]">Saved as My CV</p>
+          )}
         </div>
       )}
 
-      <button
-        onClick={preview ? handleConfirm : handleFetch}
-        disabled={isLoading}
-        className="w-full py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
-      >
-        {isLoading ? "Loading…" : preview ? "Continue →" : "Load CV"}
-      </button>
+      {preview ? (
+        <div className="flex gap-3">
+          <button
+            onClick={handleSavePreset}
+            disabled={isSavingPreset || !savedCvId}
+            className="px-5 py-3 border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] disabled:opacity-40 transition-colors"
+          >
+            {isSavingPreset ? "Saving…" : "Save as My CV"}
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="flex-1 py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Continue →
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={handleFetch}
+          disabled={isLoading}
+          className="w-full py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          {isLoading ? "Loading…" : "Load CV"}
+        </button>
+      )}
     </div>
   );
 }

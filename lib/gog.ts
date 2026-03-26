@@ -1,5 +1,8 @@
 import { execSync } from "child_process";
+import { copyGoogleDoc, replaceSectionsInGoogleDoc } from "./google-docs";
 import { ParseResult, CVSection, SectionType } from "./types";
+
+const DEFAULT_ACCOUNT = process.env.GOG_ACCOUNT || "guyguz1@gmail.com";
 
 const SECTION_PATTERNS: { type: SectionType; patterns: RegExp[] }[] = [
   {
@@ -16,7 +19,7 @@ const SECTION_PATTERNS: { type: SectionType; patterns: RegExp[] }[] = [
   },
   {
     type: "skills",
-    patterns: [/^(skills|technical skills|core competencies|competencies)/i],
+    patterns: [/^(skills|technical skills|core competencies|competencies|proficiencies|technologies)/i],
   },
   {
     type: "education",
@@ -30,6 +33,24 @@ const SECTION_PATTERNS: { type: SectionType; patterns: RegExp[] }[] = [
       /^(certifications|certificates|licenses|accreditations)/i,
     ],
   },
+  {
+    type: "other",
+    patterns: [
+      /^(languages|language)/i,
+    ],
+  },
+];
+
+// Section headers that indicate a new section in plain-text CV output
+const ALL_CAPS_SECTION_HEADERS = [
+  "PROFILE", "SUMMARY", "ABOUT", "OBJECTIVE",
+  "WORK EXPERIENCE", "EXPERIENCE", "WORK HISTORY", "EMPLOYMENT",
+  "SKILLS", "TECHNICAL SKILLS", "CORE COMPETENCIES", "COMPETENCIES",
+  "PROFICIENCIES", "TOOLS", "TECHNOLOGIES",
+  "EDUCATION", "ACADEMIC", "QUALIFICATIONS",
+  "CERTIFICATIONS", "CERTIFICATES", "LICENSES",
+  "PROJECTS", "PORTFOLIO",
+  "LANGUAGES", "LANGUAGE",
 ];
 
 function detectSectionType(title: string): SectionType {
@@ -46,14 +67,18 @@ function detectSectionType(title: string): SectionType {
 }
 
 function parseMarkdownToSections(markdown: string): ParseResult {
-  const lines = markdown.split("\n");
+  // Strip ANSI color codes that gog sometimes outputs
+  const clean = markdown.replace(/\x1b\[[0-9;]*m/g, "");
+  const lines = clean.split("\n");
   const sections: CVSection[] = [];
   let currentSection: { title: string; lines: string[] } | null = null;
   let originalIndex = 0;
 
   for (const line of lines) {
-    // Check if this is a heading (## Section Title)
-    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    const trimmed = line.trim();
+
+    // Check if this is a markdown heading (## Section Title)
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
       // Save previous section
       if (currentSection) {
@@ -67,7 +92,32 @@ function parseMarkdownToSections(markdown: string): ParseResult {
       }
       // Start new section
       currentSection = { title: headingMatch[2], lines: [] };
-    } else if (currentSection) {
+      continue;
+    }
+
+    // Check if this is an ALL CAPS section header (PROFILE, WORK EXPERIENCE, etc.)
+    const isAllCaps = trimmed.length > 2 &&
+      trimmed.length < 60 &&
+      /^[A-Z][A-Z\s\-–]+$/.test(trimmed) &&
+      ALL_CAPS_SECTION_HEADERS.some(h => trimmed.includes(h));
+
+    if (isAllCaps) {
+      // Save previous section
+      if (currentSection) {
+        sections.push({
+          type: detectSectionType(currentSection.title),
+          title: currentSection.title,
+          content: currentSection.lines.join("\n").trim(),
+          originalIndex,
+        });
+        originalIndex++;
+      }
+      // Start new section
+      currentSection = { title: trimmed, lines: [] };
+      continue;
+    }
+
+    if (currentSection) {
       currentSection.lines.push(line);
     }
   }
@@ -82,10 +132,10 @@ function parseMarkdownToSections(markdown: string): ParseResult {
     });
   }
 
-  return { sections, rawText: markdown };
+  return { sections, rawText: clean };
 }
 
-function extractDocId(urlOrId: string): string {
+export function extractDocId(urlOrId: string): string {
   // Check if it's already just an ID (no slashes)
   if (!urlOrId.includes("/")) {
     return urlOrId;
@@ -115,21 +165,25 @@ export async function parseCVFromUrl(docUrl: string): Promise<ParseResult> {
 
   try {
     // Use gog docs cat to read the document content
-    const command = `gog docs cat "${docId}"`;
-    const output = execSync(command, { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+    const command = `gog docs cat "${docId}" --account ${DEFAULT_ACCOUNT}`;
+    const output = execSync(command, { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 })
+      .replace(/\x1b\[[0-9;]*m/g, "");
 
     // gog outputs markdown/text, parse it into sections
     return parseMarkdownToSections(output);
   } catch (error) {
     if (error instanceof Error) {
       const msg = error.message.toLowerCase();
-      if (msg.includes("not authenticated") || msg.includes("auth") || msg.includes("login")) {
+      if (msg.includes("not authenticated") || msg.includes("not logged in") || msg.includes("login required")) {
         throw new Error(
           "Not authenticated with Google. Run 'gog auth login' first."
         );
       }
-      if (msg.includes("not found") || msg.includes("no such document")) {
+      if (msg.includes("not found") || msg.includes("no such document") || msg.includes("no document found")) {
         throw new Error("Document not found or you don't have access to it.");
+      }
+      if (msg.includes("missing --account")) {
+        throw new Error("No Google account set. Set GOG_ACCOUNT or use --account.");
       }
       throw new Error(`Failed to read document: ${error.message}`);
     }
@@ -139,36 +193,15 @@ export async function parseCVFromUrl(docUrl: string): Promise<ParseResult> {
 
 export async function createDocFromContent(
   title: string,
-  content: string
+  originalDocUrl: string,
+  originalSections: CVSection[],
+  tailoredSections: CVSection[]
 ): Promise<string> {
   try {
-    // Use gog docs create to make a new document
-    const command = `echo '${content.replace(/'/g, "'\\''")}' | gog docs create "${title}"`;
-    const output = execSync(command, { encoding: "utf-8" });
-
-    // Try to parse the output for the new document URL
-    // gog may output: Created: https://docs.google.com/document/d/ID/edit
-    // or JSON: {"id": "...", "url": "..."}
-    const urlMatch = output.match(/https:\/\/docs\.google\.com\/document\/d\/[a-zA-Z0-9-_]+/);
-    if (urlMatch) {
-      return urlMatch[0];
-    }
-
-    // Try JSON parsing
-    try {
-      const parsed = JSON.parse(output);
-      if (parsed.url || parsed.docUrl || parsed.link || parsed.resourceId) {
-        const id = parsed.url || parsed.docUrl || parsed.link || parsed.resourceId;
-        if (id.includes("docs.google.com")) {
-          return id;
-        }
-        return `https://docs.google.com/document/d/${id}/edit`;
-      }
-    } catch {
-      // Not JSON
-    }
-
-    throw new Error("Could not parse document URL from gog output");
+    const originalDocId = extractDocId(originalDocUrl);
+    const { documentId, url } = await copyGoogleDoc(originalDocId, title);
+    await replaceSectionsInGoogleDoc(documentId, originalSections, tailoredSections);
+    return url;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Failed to create document: ${error.message}`);
