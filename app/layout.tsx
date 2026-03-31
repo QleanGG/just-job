@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import QueryProvider from "@/components/QueryProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased min-h-screen">{children}</body>
+      <body className="antialiased min-h-screen">
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

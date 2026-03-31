@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import BottomNav from "./BottomNav";
 import type { CV, KeywordAnalysis, Revision } from "@/lib/supabase";
 import type { Job } from "@/lib/types";
@@ -9,6 +10,11 @@ import type { Job } from "@/lib/types";
 
 type StageFilterValue = "all" | "applied" | "interview" | "offer" | "rejected" | "withdrawn";
 type AppStatus = NonNullable<Job["application_status"]> | "";
+type JobDetailsResponse = {
+  revisions: Revision[];
+  analysis: KeywordAnalysis[];
+  cvs: CV[];
+};
 type NoteEntry = { text: string; timestamp: string };
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -213,49 +219,30 @@ function JobSheet({
   onClose: () => void;
   onRetailor: () => void;
 }) {
-  const [revisions, setRevisions] = useState<Revision[]>([]);
-  const [analysis, setAnalysis] = useState<KeywordAnalysis | null>(null);
-  const [sourceCv, setSourceCv] = useState<CV | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [expandedDescription, setExpandedDescription] = useState(false);
   const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [optimisticStatus, setOptimisticStatus] = useState(job.application_status || "");
   const [isDragging, setIsDragging] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setIsLoading(true);
-      try {
-        const [revRes, anaRes, cvsRes] = await Promise.all([
-          fetch(`/api/jobs/${job.id}/revisions`),
-          fetch(`/api/jobs/${job.id}/analysis`),
-          fetch("/api/cv"),
-        ]);
-        if (cancelled) return;
-        if (!revRes.ok || !anaRes.ok || !cvsRes.ok) throw new Error("Load failed");
-        const [revData, anaData, cvsData] = await Promise.all([
-          revRes.json() as Promise<Revision[]>,
-          anaRes.json() as Promise<KeywordAnalysis[]>,
-          cvsRes.json() as Promise<CV[]>,
-        ]);
-        setRevisions(revData);
-        setAnalysis(anaData[anaData.length - 1] || null);
-        setSourceCv(cvsData.find((c) => c.id === job.cv_id) || null);
-      } catch (e) {
-        if (!cancelled) setDetailError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [job.id, job.cv_id]);
+  const { data, isLoading, error } = useQuery<JobDetailsResponse, Error>({
+    queryKey: ["job-details", job.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${job.id}/details`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  const revisions = data?.revisions || [];
+  const analysis = data?.analysis?.length ? data.analysis[data.analysis.length - 1] : null;
+  const cvs = data?.cvs || [];
+  const sourceCv: CV | null = job.cv_id ? cvs.find((c) => c.id === job.cv_id) || null : null;
 
   const handleStageClick = async (value: AppStatus) => {
     setStatusError(null);
@@ -360,7 +347,9 @@ function JobSheet({
           </div>
 
           {isLoading ? (
-            <div className="space-y-4 py-8 text-center text-sm text-[var(--color-text-muted)]">Loading…</div>
+            <div className="py-8 text-center text-sm text-[var(--color-text-muted)]">Loading…</div>
+          ) : error ? (
+            <div className="py-8 text-center text-sm text-[var(--color-error)]">{error.message}</div>
           ) : (
             <>
               {/* Stage selector */}
@@ -387,11 +376,7 @@ function JobSheet({
               {/* Keyword match */}
               <section className="mb-5 border-t border-[var(--color-border)] pt-5">
                 <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-[var(--color-text-muted)]">Keyword Match</p>
-                {detailError ? (
-                  <p className="text-sm text-[var(--color-error)]">{detailError}</p>
-                ) : (
-                  <KeywordBar analysis={analysis} revisions={revisions} />
-                )}
+                <KeywordBar analysis={analysis} revisions={revisions} />
               </section>
 
               {/* Tailored CVs */}
