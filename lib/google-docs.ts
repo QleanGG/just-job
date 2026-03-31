@@ -6,6 +6,32 @@ import { CVSection } from "./types";
 
 const DEFAULT_ACCOUNT = process.env.GOG_ACCOUNT || "guyguz1@gmail.com";
 const DEFAULT_CLIENT = process.env.GOG_CLIENT_NAME || "default";
+const ENV_CLIENT_ID = process.env.GOG_CLIENT_ID;
+const ENV_CLIENT_SECRET = process.env.GOG_CLIENT_SECRET;
+
+function getOAuthClientCredentials() {
+  if (ENV_CLIENT_ID && ENV_CLIENT_SECRET) {
+    return {
+      clientId: ENV_CLIENT_ID,
+      clientSecret: ENV_CLIENT_SECRET,
+    };
+  }
+
+  const raw = JSON.parse(readFileSync("/home/guy/.config/gogcli/credentials.json", "utf-8"));
+  const wrapped = raw as {
+    installed?: { client_id: string; client_secret: string };
+    web?: { client_id: string; client_secret: string };
+  };
+  const creds = wrapped.installed || wrapped.web;
+  if (!creds?.client_id || !creds?.client_secret) {
+    throw new Error("Missing Google OAuth credentials");
+  }
+
+  return {
+    clientId: creds.client_id,
+    clientSecret: creds.client_secret,
+  };
+}
 
 function loadRefreshToken(): string {
   const tempDir = mkdtempSync(join(require("os").tmpdir(), "cv-tailor-gog-token-"));
@@ -29,14 +55,9 @@ function loadRefreshToken(): string {
 }
 
 async function getDocsClient() {
-  const raw = JSON.parse(readFileSync("/home/guy/.config/gogcli/credentials.json", "utf-8"));
-  const wrapped = raw as { installed?: { client_id: string; client_secret: string }; web?: { client_id: string; client_secret: string } };
-  const creds = wrapped.installed || wrapped.web;
-  if (!creds?.client_id || !creds?.client_secret) {
-    throw new Error("Missing Google OAuth credentials");
-  }
+  const creds = getOAuthClientCredentials();
 
-  const auth = new google.auth.OAuth2(creds.client_id, creds.client_secret);
+  const auth = new google.auth.OAuth2(creds.clientId, creds.clientSecret);
   auth.setCredentials({ refresh_token: loadRefreshToken() });
   await auth.getAccessToken();
 

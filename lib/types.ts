@@ -61,6 +61,7 @@ export interface Job {
   job_company: string | null;
   job_description: string | null;
   status: "draft" | "tailoring" | "done" | "failed";
+  application_status?: "not_applied" | "applied" | "interview" | "offer" | "rejected" | "withdrawn" | null;
   tailored_cv_url: string | null;
   last_error: string | null;
   created_at: string;

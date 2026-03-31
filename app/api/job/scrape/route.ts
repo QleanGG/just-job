@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scrapeJobUrl, parseJobText } from "@/lib/scraper";
+import { getServerUser } from "@/lib/get-server-user";
 import { z } from "zod";
 
 const schema = z.object({
@@ -9,6 +10,9 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await request.json();
     const { url, text } = schema.parse(body);
 

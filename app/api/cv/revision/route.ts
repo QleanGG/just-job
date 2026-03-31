@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { copyGoogleDoc, replaceSectionsInGoogleDoc } from "@/lib/google-docs";
 import { getServerClient } from "@/lib/supabase";
 import { parseJsonObjectFromModelResponse } from "@/lib/ai-json";
 import { getServerUser } from "@/lib/get-server-user";
@@ -33,29 +34,29 @@ function getOpenAIClient(): OpenAI {
 }
 
 export async function POST(request: NextRequest) {
-  let jobId: string | null = null;
-
   try {
     const user = await getServerUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { cv, job, jobId: jid } = await request.json();
-    if (!cv || !job) {
-      return NextResponse.json({ error: "Missing cv or job data" }, { status: 400 });
+    const { jobId, previousSections, feedback, job, cvUrl } = await request.json();
+
+    if (!jobId || !job) {
+      return NextResponse.json({ error: "Missing jobId or job" }, { status: 400 });
     }
-    jobId = jid || null;
 
     const supabase = getServerClient();
-    if (jobId) {
-      await supabase
-        .from("jobs")
-        .update({ status: "tailoring", updated_at: new Date().toISOString() })
-        .eq("id", jobId).eq("user_id", user.id);
-    }
 
-    // Truncate each section to keep prompt within token limits
+    const { data: revisions } = await supabase
+      .from("revisions")
+      .select("revision_number")
+      .eq("job_id", jobId)
+      .order("revision_number", { ascending: false })
+      .limit(1);
+
+    const revisionNumber = (revisions?.[0]?.revision_number || 0) + 1;
+
     const MAX_CHARS = 800;
-    const sectionsText = cv
+    const sectionsText = previousSections
       .map((section: { title: string; content: string }, index: number) => {
         const truncated = section.content.length > MAX_CHARS
           ? section.content.slice(0, MAX_CHARS) + "..."
@@ -64,7 +65,6 @@ export async function POST(request: NextRequest) {
       })
       .join("\n\n");
 
-    // Truncate job description too
     const jobDesc = job.description.length > 1500
       ? job.description.slice(0, 1500) + "..."
       : job.description;
@@ -74,7 +74,7 @@ Title: ${job.title}
 Company: ${job.company}
 Description: ${jobDesc}
 
-CV SECTIONS:
+${feedback ? `PREVIOUS FEEDBACK: "${feedback}"\nApply this feedback when rewriting.\n` : ""}CV SECTIONS:
 ${sectionsText}
 
 Rewrite each section. Return ONLY valid JSON, no markdown fences.`;
@@ -109,7 +109,7 @@ Rewrite each section. Return ONLY valid JSON, no markdown fences.`;
       }>;
     };
 
-    const tailoredSections = cv.map((section: { title: string; content: string; type: string; originalIndex: number }, index: number) => {
+    const tailoredSections = previousSections.map((section: { title: string; content: string; type: string; originalIndex: number }, index: number) => {
       const tailoredData = parsed.sections?.find((item: { index: number }) => item.index === index);
       return {
         ...section,
@@ -124,31 +124,68 @@ Rewrite each section. Return ONLY valid JSON, no markdown fences.`;
 
     // Simple keyword extraction
     const jobKeywords = job.description.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
-    const cvText = cv.map((section: { content: string }) => section.content.toLowerCase()).join(" ");
+    const cvText = previousSections.map((section: { content: string }) => section.content.toLowerCase()).join(" ");
     const cvKeywords = new Set(cvText.match(/\b[a-z]{4,}\b/g) || []);
     const matchedKeywords = [...new Set(jobKeywords)].filter(w => cvKeywords.has(w));
     const missedKeywords = [...new Set(jobKeywords)].filter(w => !cvKeywords.has(w));
 
+    let newDocUrl = "";
+    if (cvUrl) {
+      try {
+        const newTitle = `${job.title} @ ${job.company} — v${revisionNumber}`;
+        const { documentId } = await copyGoogleDoc(cvUrl, newTitle);
+        await replaceSectionsInGoogleDoc(documentId, previousSections, tailoredSections);
+        newDocUrl = `https://docs.google.com/document/d/${documentId}/edit`;
+      } catch (err) {
+        console.error("Failed to create Google Doc:", err);
+      }
+    }
+
+    const { data: revisionData, error: revisionError } = await supabase
+      .from("revisions")
+      .insert({
+        job_id: jobId,
+        user_id: user.id,
+        revision_number: revisionNumber,
+        tailored_cv_url: newDocUrl || null,
+        feedback: feedback || null,
+        tailored_sections: tailoredSections,
+      })
+      .select("id")
+      .single();
+
+    if (revisionError || !revisionData) throw revisionError || new Error("Failed to create revision");
+
+    const revisionId = revisionData.id;
+
+    await supabase.from("keyword_analysis").insert({
+      job_id: jobId,
+      user_id: user.id,
+      revision_id: revisionId,
+      matched_keywords: matchedKeywords,
+      missed_keywords: missedKeywords,
+    });
+
+    await supabase
+      .from("jobs")
+      .update({
+        status: "done",
+        tailored_cv_url: newDocUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId).eq("user_id", user.id);
+
     return NextResponse.json({
+      revisionId,
+      revisionNumber,
+      newDocUrl,
       tailoredSections,
       keywordAnalysis: { matchedKeywords, missedKeywords },
     });
   } catch (error) {
-    if (jobId) {
-      try {
-        const supabase = getServerClient();
-        await supabase
-          .from("jobs")
-          .update({
-            status: "failed",
-            last_error: error instanceof Error ? error.message : "Unknown error",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-      } catch {}
-    }
+    console.error("Revision error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Tailoring failed" },
+      { error: error instanceof Error ? error.message : "Revision failed" },
       { status: 500 }
     );
   }

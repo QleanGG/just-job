@@ -1,13 +1,14 @@
 "use client";
 
 interface StepIndicatorProps {
-  currentStep: 1 | 2 | 3;
+  currentStep: 1 | 2 | 3 | 4;
 }
 
 const steps = [
   { num: 1, label: "Your CV" },
   { num: 2, label: "Job Listing" },
-  { num: 3, label: "Review" },
+  { num: 3, label: "AI Analysis" },
+  { num: 4, label: "Google Docs" },
 ];
 
 export default function StepIndicator({ currentStep }: StepIndicatorProps) {

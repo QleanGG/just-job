@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobById, updateJob, deleteJob } from "@/lib/supabase";
+import { getServerUser } from "@/lib/get-server-user";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
-    const job = getJobById(id);
+    const job = await getJobById(id, user.id);
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
@@ -22,10 +26,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const { status, tailoredCvUrl, jobDescription } = await request.json();
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const job = updateJob(id, { status, tailoredCvUrl, jobDescription });
+    const { id } = await params;
+    const { status, tailoredCvUrl, lastError, application_status } = await request.json();
+
+    const job = await updateJob(id, { status, tailoredCvUrl, lastError, applicationStatus: application_status }, user.id);
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
@@ -41,11 +48,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
-    const deleted = deleteJob(id);
-    if (!deleted) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    await deleteJob(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: "Failed to delete job" }, { status: 500 });

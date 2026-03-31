@@ -20,8 +20,8 @@ npm install
 Configure your environment:
 
 ```bash
-cp .env.example .env
-# Set OPENCLAW_GATEWAY_TOKEN from your OpenClaw config
+cp .env.example .env.local
+# Fill in Supabase, OpenRouter, and Google Docs credentials
 ```
 
 Run:
@@ -29,6 +29,17 @@ Run:
 ```bash
 npm run dev
 ```
+
+## Deployment access control
+
+This app is intended to be deployed behind two layers of protection:
+
+1. Create approved users in Supabase Auth and set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and in the deployment environment.
+2. Keep `.env.local` private. It is already gitignored and must not be committed.
+3. Set the other required deployment variables in Vercel: `OPENROUTER_API_KEY`, optional `OPENROUTER_BASE_URL`, optional `TAILOR_MODEL`, plus any Google Docs credentials you use.
+4. Enable Vercel Access Control as a second gate in project settings.
+
+After deployment, every route is gated by `middleware.ts`. Unauthenticated requests are redirected to `/login`, and successful login stores the Supabase auth session in cookies that middleware validates on each request.
 
 ## Tech
 

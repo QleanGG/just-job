@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCVFromUrl } from "@/lib/gog";
 import { upsertCv } from "@/lib/supabase";
+import { getServerUser } from "@/lib/get-server-user";
 import { z } from "zod";
-import { randomUUID } from "crypto";
 
 const parseSchema = z.object({
   docUrl: z.string().url("Invalid Google Docs URL"),
@@ -11,18 +11,20 @@ const parseSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await request.json();
     const { docUrl, cvId } = parseSchema.parse(body);
 
     const result = await parseCVFromUrl(docUrl);
 
-    // Save CV to SQLite
-    const id = cvId || crypto.randomUUID();
-    upsertCv(id, "Master CV", docUrl, result.sections);
+    const saved = await upsertCv({ id: cvId, name: "Master CV", docUrl, parsedSections: result.sections, userId: user.id });
+    const returnedId = saved?.id || cvId;
 
     return NextResponse.json({
       sections: result.sections,
-      cvId: id,
+      cvId: returnedId,
       saved: true,
     });
   } catch (error) {

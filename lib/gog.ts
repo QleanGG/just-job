@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { copyGoogleDoc, replaceSectionsInGoogleDoc } from "./google-docs";
 import { ParseResult, CVSection, SectionType } from "./types";
 
@@ -41,7 +41,6 @@ const SECTION_PATTERNS: { type: SectionType; patterns: RegExp[] }[] = [
   },
 ];
 
-// Section headers that indicate a new section in plain-text CV output
 const ALL_CAPS_SECTION_HEADERS = [
   "PROFILE", "SUMMARY", "ABOUT", "OBJECTIVE",
   "WORK EXPERIENCE", "EXPERIENCE", "WORK HISTORY", "EMPLOYMENT",
@@ -67,7 +66,6 @@ function detectSectionType(title: string): SectionType {
 }
 
 function parseMarkdownToSections(markdown: string): ParseResult {
-  // Strip ANSI color codes that gog sometimes outputs
   const clean = markdown.replace(/\x1b\[[0-9;]*m/g, "");
   const lines = clean.split("\n");
   const sections: CVSection[] = [];
@@ -77,10 +75,8 @@ function parseMarkdownToSections(markdown: string): ParseResult {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Check if this is a markdown heading (## Section Title)
     const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
-      // Save previous section
       if (currentSection) {
         sections.push({
           type: detectSectionType(currentSection.title),
@@ -90,19 +86,16 @@ function parseMarkdownToSections(markdown: string): ParseResult {
         });
         originalIndex++;
       }
-      // Start new section
       currentSection = { title: headingMatch[2], lines: [] };
       continue;
     }
 
-    // Check if this is an ALL CAPS section header (PROFILE, WORK EXPERIENCE, etc.)
     const isAllCaps = trimmed.length > 2 &&
       trimmed.length < 60 &&
       /^[A-Z][A-Z\s\-–]+$/.test(trimmed) &&
-      ALL_CAPS_SECTION_HEADERS.some(h => trimmed.includes(h));
+      ALL_CAPS_SECTION_HEADERS.some((header) => trimmed.includes(header));
 
     if (isAllCaps) {
-      // Save previous section
       if (currentSection) {
         sections.push({
           type: detectSectionType(currentSection.title),
@@ -112,7 +105,6 @@ function parseMarkdownToSections(markdown: string): ParseResult {
         });
         originalIndex++;
       }
-      // Start new section
       currentSection = { title: trimmed, lines: [] };
       continue;
     }
@@ -122,7 +114,6 @@ function parseMarkdownToSections(markdown: string): ParseResult {
     }
   }
 
-  // Don't forget the last section
   if (currentSection) {
     sections.push({
       type: detectSectionType(currentSection.title),
@@ -135,13 +126,18 @@ function parseMarkdownToSections(markdown: string): ParseResult {
   return { sections, rawText: clean };
 }
 
+function validateDocId(docId: string) {
+  if (!/^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(docId)) {
+    throw new Error("Invalid document ID");
+  }
+}
+
 export function extractDocId(urlOrId: string): string {
-  // Check if it's already just an ID (no slashes)
   if (!urlOrId.includes("/")) {
+    validateDocId(urlOrId);
     return urlOrId;
   }
 
-  // Extract doc ID from various Google Docs URL formats
   const patterns = [
     /\/document\/d\/([a-zA-Z0-9-_]+)/,
     /\/docs\/d\/([a-zA-Z0-9-_]+)/,
@@ -151,6 +147,7 @@ export function extractDocId(urlOrId: string): string {
   for (const pattern of patterns) {
     const match = urlOrId.match(pattern);
     if (match) {
+      validateDocId(match[1]);
       return match[1];
     }
   }
@@ -164,12 +161,12 @@ export async function parseCVFromUrl(docUrl: string): Promise<ParseResult> {
   const docId = extractDocId(docUrl);
 
   try {
-    // Use gog docs cat to read the document content
-    const command = `gog docs cat "${docId}" --account ${DEFAULT_ACCOUNT}`;
-    const output = execSync(command, { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 })
-      .replace(/\x1b\[[0-9;]*m/g, "");
+    const output = execFileSync(
+      "gog",
+      ["docs", "cat", docId, "--account", DEFAULT_ACCOUNT],
+      { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
+    ).replace(/\x1b\[[0-9;]*m/g, "");
 
-    // gog outputs markdown/text, parse it into sections
     return parseMarkdownToSections(output);
   } catch (error) {
     if (error instanceof Error) {

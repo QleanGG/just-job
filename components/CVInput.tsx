@@ -5,7 +5,8 @@ import { CV } from "@/lib/supabase";
 import { CVSection } from "@/lib/types";
 
 interface CVInputProps {
-  initialUrl: string;
+  initialUrl?: string | null;
+  presets: Array<{ id: string; doc_url: string; display_name: string | null; name: string; parsed_sections: unknown }>;
   onUrlChange: (url: string) => void;
   onCVLoaded: (sections: CVSection[], cvId?: string) => void;
   onPresetSaved?: (preset: {
@@ -18,11 +19,12 @@ interface CVInputProps {
 
 export default function CVInput({
   initialUrl,
+  presets,
   onUrlChange,
   onCVLoaded,
   onPresetSaved,
 }: CVInputProps) {
-  const [url, setUrl] = useState(initialUrl);
+  const [url, setUrl] = useState(initialUrl ?? "");
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingPreset, setIsSavingPreset] = useState(false);
   const [error, setError] = useState("");
@@ -31,7 +33,7 @@ export default function CVInput({
   const [presetSaved, setPresetSaved] = useState(false);
 
   useEffect(() => {
-    setUrl(initialUrl);
+    setUrl(initialUrl ?? "");
   }, [initialUrl]);
 
   const handleFetch = async () => {
@@ -119,6 +121,56 @@ export default function CVInput({
 
   return (
     <div className="space-y-5">
+      {presets.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+          <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
+            Use a saved CV
+          </label>
+          <select
+            value=""
+            onChange={async (e) => {
+              const id = e.target.value;
+              if (!id) return;
+              const selected = presets.find(p => p.id === id);
+              if (!selected) return;
+              const docUrl = selected.doc_url ?? "";
+              setUrl(docUrl);
+              setIsLoading(true);
+              setError("");
+              setPreview(null);
+              setSavedCvId("");
+              setPresetSaved(false);
+              try {
+                const res = await fetch("/api/cv/parse", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ docUrl, cvId: id }),
+                });
+                if (!res.ok) {
+                  const err = await res.json();
+                  throw new Error(err.error || "Failed to load CV");
+                }
+                const data = await res.json();
+                setPreview(data.sections);
+                setSavedCvId(data.cvId || id);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to load CV");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-accent)] transition-colors cursor-pointer"
+          >
+            <option value="">— Select a saved CV —</option>
+            {presets.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.display_name || p.name} ({new URL(p.doc_url).pathname.split("/")[5] || p.doc_url.slice(0, 40)}…)
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
         <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
           Google Docs URL

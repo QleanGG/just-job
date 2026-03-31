@@ -125,17 +125,6 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
         ) : (
           <>
             <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
-              Job Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Technical Product Manager"
-              className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors mb-4"
-            />
-
-            <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
               Company
             </label>
             <input
@@ -143,6 +132,17 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="e.g. Google"
+              className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors mb-4"
+            />
+
+            <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
+              Job Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Technical Product Manager"
               className="w-full px-4 py-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors mb-4"
             />
 
@@ -179,14 +179,14 @@ export default function JobInput({ onJobLoaded, onBack }: JobInputProps) {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-sm font-medium text-[var(--color-text)]">
-                {preview.title}
-              </h3>
               {preview.company && (
-                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                <p className="text-xs text-[var(--color-text-muted)] mb-0.5">
                   {preview.company}
                 </p>
               )}
+              <h3 className="text-sm font-medium text-[var(--color-text)]">
+                {preview.title}
+              </h3>
             </div>
             <span className="text-xs text-[var(--color-text-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1 rounded">
               {preview.source}

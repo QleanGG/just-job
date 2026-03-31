@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "AI-powered CV tailoring from Google Docs to any job",
   icons: {
     icon: "/favicon-192x192.png",
-    "apple-touch-icon": "/apple-touch-icon.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 
