@@ -1,9 +1,5 @@
 "use client";
 
-import MobileHeader from "@/components/MobileHeader";
-import MobileNav from "@/components/MobileNav";
-import { Sidebar } from "@/components/redesign/sidebar";
-import { TopBar } from "@/components/redesign/topbar";
 import { Icon, MiniDocument, SurfaceCard } from "@/components/redesign/ui";
 import { useCVs } from "@/hooks/useCVs";
 import type { CV } from "@/lib/supabase";
@@ -32,7 +28,7 @@ function GoogleMark() {
   );
 }
 
-export default function CvsPage() {
+export default function CvsBody() {
   const { data: cvs = [], isLoading } = useCVs();
 
   const sortedCvs = [...cvs].sort(
@@ -47,14 +43,9 @@ export default function CvsPage() {
   const visibleArchive = archiveCvs.length ? archiveCvs : remainingCvs;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
-      <Sidebar active="cvs" />
-      <MobileHeader />
-
+    <div className="min-h-screen bg-[var(--background)] pt-16 text-[var(--on-surface)]">
       <div className="relative min-h-screen lg:pl-64">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_left,rgba(110,155,255,0.14),transparent_34rem)]" />
-        <TopBar searchPlaceholder="Search templates, versions, notes" />
-
         <main className="relative px-4 pb-10 pt-8 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-10">
             <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -258,7 +249,6 @@ export default function CvsPage() {
         </main>
       </div>
 
-      <MobileNav />
     </div>
   );
 }

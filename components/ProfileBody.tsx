@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase-browser";
-import MobileHeader from "@/components/MobileHeader";
-import MobileNav from "@/components/MobileNav";
-import { Sidebar } from "@/components/redesign/sidebar";
 import { SurfaceCard } from "@/components/redesign/ui";
 
-export default function ProfilePage() {
+export default function ProfileBody() {
   const router = useRouter();
   const [user, setUser] = useState<{ email?: string; full_name?: string; avatar_url?: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,9 +31,7 @@ export default function ProfilePage() {
   const displayName = user?.full_name || user?.email || "Your Profile";
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
-      <Sidebar active="settings" />
-
+    <div className="min-h-screen bg-[var(--background)] pt-16 text-[var(--on-surface)]">
       <div className="relative min-h-screen lg:pl-64">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_left,rgba(129,236,255,0.08),transparent_34rem)]" />
 
@@ -160,7 +155,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <MobileNav />
     </div>
   );
 }

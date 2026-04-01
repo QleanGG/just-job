@@ -1,11 +1,6 @@
 "use client";
 
 import { useQueries } from "@tanstack/react-query";
-import MobileFAB from "@/components/MobileFAB";
-import MobileHeader from "@/components/MobileHeader";
-import MobileNav from "@/components/MobileNav";
-import { Sidebar } from "@/components/redesign/sidebar";
-import { TopBar } from "@/components/redesign/topbar";
 import { Icon, MatchRing, StatusPill, SurfaceCard } from "@/components/redesign/ui";
 import { useApplications } from "@/hooks/useApplications";
 import { useCVs } from "@/hooks/useCVs";
@@ -95,7 +90,7 @@ function getMostActiveLane(jobs: Job[]) {
   return lane ? getStatusLabel(lane as Job["application_status"]) : "Pipeline building";
 }
 
-export default function DashboardPage() {
+export default function DashboardBody() {
   const { data: jobs = [], isLoading } = useApplications();
   const { data: cvs = [] } = useCVs();
 
@@ -159,14 +154,9 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
-      <Sidebar active="dashboard" />
-      <MobileHeader />
-
+    <div className="min-h-screen bg-[var(--background)] pt-16 text-[var(--on-surface)]">
       <div className="relative min-h-screen lg:pl-64">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_right,rgba(129,236,255,0.12),transparent_34rem)]" />
-        <TopBar filterLabel="STAGE: ALL" searchPlaceholder="Search roles, companies, notes" />
-
         <main className="relative px-4 pb-10 pt-8 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-10">
             <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -299,8 +289,6 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      <MobileFAB />
-      <MobileNav />
     </div>
   );
 }

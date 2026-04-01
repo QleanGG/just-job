@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import MobileFAB from "@/components/MobileFAB";
 import MobileNav from "@/components/MobileNav";
+import { getServerUser } from "@/lib/get-server-user";
 import { AppLogo, Icon, SectionTitle, SurfaceCard } from "@/components/redesign/ui";
 
 const navItems = ["Features", "Pricing", "Resources"];
@@ -48,7 +50,12 @@ const footerGroups = [
   },
 ] as const;
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getServerUser();
+  if (user) {
+    redirect("/shell");
+  }
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--background)] text-[var(--on-surface)]">
       <div className="pointer-events-none fixed inset-x-0 top-0 h-[36rem] bg-[radial-gradient(circle_at_top_center,rgba(129,236,255,0.18),transparent_38rem)]" />
