@@ -8,7 +8,7 @@ const tabs = [
   { href: "/", label: "Home", icon: "grid_view" },
   { href: "/dashboard", label: "Applications", icon: "assignment_turned_in" },
   { href: "/cvs", label: "Resumes", icon: "description" },
-  { href: "/login", label: "Profile", icon: "account_circle" },
+  { href: "/profile", label: "Profile", icon: "account_circle" },
 ] as const;
 
 export default function MobileNav() {
