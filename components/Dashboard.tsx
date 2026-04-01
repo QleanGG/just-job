@@ -63,6 +63,23 @@ function formatShortDate(dateStr: string): string {
   });
 }
 
+function getCompanyInitials(company: string | null | undefined): string {
+  const value = (company || "Unknown company").trim();
+  const words = value.split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => word[0]?.toUpperCase() || "").join("") || "?";
+}
+
+function getLogoUrl(jobUrl: string | null): string | null {
+  if (!jobUrl) return null;
+
+  try {
+    const hostname = new URL(jobUrl).hostname;
+    return `https://www.google.com/s2/favicons?sz=64&domain=${hostname}`;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Stage Badge ───────────────────────────────────────────────────────────────
 
 function StageBadge({ status }: { status: string }) {
@@ -71,6 +88,49 @@ function StageBadge({ status }: { status: string }) {
     <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${meta.badge}`}>
       {meta.label}
     </span>
+  );
+}
+
+function CompanyIdentity({
+  company,
+  jobUrl,
+  size = "sm",
+}: {
+  company: string | null;
+  jobUrl: string | null;
+  size?: "sm" | "lg";
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const logoUrl = getLogoUrl(jobUrl);
+  const companyName = company || "Unknown company";
+  const initials = getCompanyInitials(company);
+  const isLarge = size === "lg";
+  const containerClass = isLarge ? "gap-3" : "gap-2.5";
+  const avatarClass = isLarge ? "h-12 w-12 rounded-xl text-sm" : "h-9 w-9 rounded-lg text-xs";
+  const nameClass = isLarge ? "text-sm" : "text-xs";
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [logoUrl]);
+
+  return (
+    <div className={`flex items-center ${containerClass}`}>
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] font-semibold text-[var(--color-text-secondary)] ${avatarClass}`}>
+        {logoUrl && !imageFailed ? (
+          <img
+            src={logoUrl}
+            alt={`${companyName} logo`}
+            className="h-full w-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <span>{initials}</span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className={`truncate font-medium text-[var(--color-text-secondary)] ${nameClass}`}>{companyName}</p>
+      </div>
+    </div>
   );
 }
 
@@ -160,12 +220,12 @@ function JobCard({
         </div>
 
         {/* Company + date */}
-        <p className="mt-1.5 pl-4 text-xs text-[var(--color-text-secondary)]">
-          {job.job_company || "Unknown company"}
+        <div className="mt-2 pl-4">
+          <CompanyIdentity company={job.job_company} jobUrl={job.job_url} />
           {job.updated_at ? (
-            <span className="ml-2 text-[var(--color-text-muted)]">· {formatRelativeDate(job.updated_at)}</span>
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">Updated {formatRelativeDate(job.updated_at)}</p>
           ) : null}
-        </p>
+        </div>
 
         {/* Tailoring status */}
         <div className="mt-2 pl-4">
@@ -335,12 +395,16 @@ function JobSheet({
           {/* Header */}
           <div className="mb-5">
             <div className="flex items-start justify-between gap-2">
-              <h2 className="text-lg font-semibold text-[var(--color-text)]">{job.job_title}</h2>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-[var(--color-text)]">{job.job_title}</h2>
+                <div className="mt-3">
+                  <CompanyIdentity company={job.job_company} jobUrl={job.job_url} size="lg" />
+                </div>
+              </div>
               <button onClick={onClose} className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text)] p-1">
                 ✕
               </button>
             </div>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{job.job_company || "Unknown company"}</p>
             <div className="mt-2">
               <StageBadge status={optimisticStatus} />
             </div>
