@@ -1,65 +1,163 @@
+"use client";
+
+import { useQueries } from "@tanstack/react-query";
 import MobileFAB from "@/components/MobileFAB";
 import MobileHeader from "@/components/MobileHeader";
 import MobileNav from "@/components/MobileNav";
 import { Sidebar } from "@/components/redesign/sidebar";
 import { TopBar } from "@/components/redesign/topbar";
 import { Icon, MatchRing, StatusPill, SurfaceCard } from "@/components/redesign/ui";
+import { useApplications } from "@/hooks/useApplications";
+import { useCVs } from "@/hooks/useCVs";
+import type { JobDetails } from "@/hooks/useJobs";
+import type { CV, Job } from "@/lib/supabase";
 
-const stats = [
-  { label: "Total Outreach", value: "24", hint: "+6 this week" },
-  { label: "Interviewing", value: "3", hint: "2 scheduled this week" },
-  { label: "Offers Made", value: "1", hint: "Stripe, Product Strategy" },
-  { label: "Average Match", value: "88%", hint: "Across active applications" },
-] as const;
+const STATUS_LABELS = {
+  not_applied: "Applied",
+  applied: "Applied",
+  interview: "Interview",
+  offer: "Offer",
+  rejected: "Rejected",
+  withdrawn: "Rejected",
+} as const;
 
-const applications = [
-  {
-    icon: "payments",
-    role: "Senior Product Strategist",
-    company: "Stripe",
-    location: "Remote · London",
-    cv: "CV v4.2",
-    match: 94,
-    status: "Offer" as const,
-    emphasized: true,
-    faded: false,
-  },
-  {
-    icon: "account_balance",
-    role: "Platform Product Lead",
-    company: "Fintech Global",
-    location: "Tel Aviv · Hybrid",
-    cv: "CV v3.8",
-    match: 89,
-    status: "Interview" as const,
-    emphasized: false,
-    faded: false,
-  },
-  {
-    icon: "design_services",
-    role: "Design Systems Product Manager",
-    company: "Design Systems Inc",
-    location: "Berlin · Remote",
-    cv: "CV v2.4",
-    match: 86,
-    status: "Applied" as const,
-    emphasized: false,
-    faded: false,
-  },
-  {
-    icon: "currency_bitcoin",
-    role: "Growth PM, Ecosystem",
-    company: "CryptoLayer",
-    location: "Remote · Global",
-    cv: "CV v1.7",
-    match: 72,
-    status: "Rejected" as const,
-    emphasized: false,
-    faded: true,
-  },
-] as const;
+const STATUS_RANGES = {
+  not_applied: [62, 72],
+  applied: [75, 85],
+  interview: [85, 95],
+  offer: [92, 99],
+  rejected: [45, 62],
+  withdrawn: [40, 58],
+  unknown: [68, 78],
+} as const;
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function getCvTitle(cv?: CV) {
+  return cv?.display_name || cv?.name || "No base CV";
+}
+
+function getStatusLabel(status: Job["application_status"]): "Applied" | "Interview" | "Offer" | "Rejected" {
+  if (!status) return "Applied";
+  return STATUS_LABELS[status] || "Applied";
+}
+
+function getPlaceholderMatch(status: Job["application_status"], seedSource: string) {
+  const range = status ? STATUS_RANGES[status] : STATUS_RANGES.unknown;
+  const seed = Array.from(seedSource).reduce((total, char) => total + char.charCodeAt(0), 0);
+  const [min, max] = range;
+  return min + (seed % (max - min + 1));
+}
+
+function getDetailMatchScore(details?: JobDetails) {
+  const analysis = details?.analysis.find((entry) => entry.matched_keywords.length + entry.missed_keywords.length > 0);
+  if (!analysis) return null;
+
+  const total = analysis.matched_keywords.length + analysis.missed_keywords.length;
+  if (!total) return null;
+
+  return Math.round((analysis.matched_keywords.length / total) * 100);
+}
+
+function getMatchScore(job: Job, details?: JobDetails) {
+  return getDetailMatchScore(details) ?? getPlaceholderMatch(job.application_status, job.id);
+}
+
+function getMatchDescription(job: Job, details?: JobDetails) {
+  const analysis = details?.analysis.find((entry) => entry.matched_keywords.length + entry.missed_keywords.length > 0);
+  if (analysis) {
+    const matched = analysis.matched_keywords.length;
+    const missed = analysis.missed_keywords.length;
+    return `${matched} matched keywords, ${missed} missed keywords from the first tailoring pass.`;
+  }
+
+  const status = job.application_status || "applied";
+  if (status === "offer") return "Late-stage role with a strong overall fit signal.";
+  if (status === "interview") return "Interview-stage application with a high estimated relevance score.";
+  if (status === "rejected" || status === "withdrawn") return "Stored as a completed pipeline outcome for reference.";
+  return "Estimated from pipeline stage until tailoring analysis is available.";
+}
+
+function getMostActiveLane(jobs: Job[]) {
+  const counts = jobs.reduce<Record<string, number>>((accumulator, job) => {
+    const key = job.application_status || "not_applied";
+    accumulator[key] = (accumulator[key] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const [lane] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || [];
+  return lane ? getStatusLabel(lane as Job["application_status"]) : "Pipeline building";
+}
 
 export default function DashboardPage() {
+  const { data: jobs = [], isLoading } = useApplications();
+  const { data: cvs = [] } = useCVs();
+
+  const detailQueries = useQueries({
+    queries: jobs.map((job) => ({
+      queryKey: ["job-details", job.id],
+      queryFn: async (): Promise<JobDetails> => {
+        const res = await fetch(`/api/jobs/${job.id}/details`);
+        if (!res.ok) throw new Error("Failed to fetch job details");
+        return res.json();
+      },
+      staleTime: 10 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+    })),
+  });
+
+  const cvById = new Map(cvs.map((cv) => [cv.id, cv]));
+  const detailsByJobId = new Map(jobs.map((job, index) => [job.id, detailQueries[index]?.data]));
+
+  const applications = jobs.map((job) => {
+    const details = detailsByJobId.get(job.id);
+    const matchScore = getMatchScore(job, details);
+    const cv = job.cv_id ? cvById.get(job.cv_id) : undefined;
+
+    return {
+      id: job.id,
+      role: job.job_title,
+      company: job.job_company || "Unknown company",
+      cvLabel: getCvTitle(cv),
+      matchScore,
+      statusLabel: getStatusLabel(job.application_status),
+      createdLabel: formatDate(job.created_at),
+      description: getMatchDescription(job, details),
+      emphasized: job.application_status === "offer" || job.application_status === "interview",
+      faded: job.application_status === "rejected" || job.application_status === "withdrawn",
+      hasTailoredCv: Boolean(job.tailored_cv_url),
+      icon: job.application_status === "offer"
+        ? "workspace_premium"
+        : job.application_status === "interview"
+          ? "record_voice_over"
+          : job.application_status === "rejected" || job.application_status === "withdrawn"
+            ? "history"
+            : "work",
+    };
+  });
+
+  const totalJobs = jobs.length;
+  const interviewCount = jobs.filter((job) => job.application_status === "interview").length;
+  const offerCount = jobs.filter((job) => job.application_status === "offer").length;
+  const jobsThisWeek = jobs.filter((job) => Date.now() - new Date(job.created_at).getTime() < 7 * 24 * 60 * 60 * 1000).length;
+  const averageMatch = applications.length
+    ? Math.round(applications.reduce((total, application) => total + application.matchScore, 0) / applications.length)
+    : 0;
+  const mostActiveLane = getMostActiveLane(jobs);
+
+  const stats = [
+    { label: "Total Outreach", value: String(totalJobs), hint: `${jobsThisWeek} added this week` },
+    { label: "Interviewing", value: String(interviewCount), hint: "Applications in live interview loops" },
+    { label: "Offers Made", value: String(offerCount), hint: offerCount ? "Offer conversations are active" : "No live offers yet" },
+    { label: "Average Match", value: `${averageMatch}%`, hint: "Across current applications" },
+  ];
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
       <Sidebar active="dashboard" />
@@ -80,12 +178,14 @@ export default function DashboardPage() {
                   Application Tracker
                 </h1>
                 <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--on-surface-variant)]">
-                  17 active applications across tailored drafts, interviews, and one live offer this cycle.
+                  {totalJobs
+                    ? `${totalJobs} tracked applications spanning drafts, interviews, and submitted roles.`
+                    : "Track live applications, tailored CVs, and pipeline movement in one place."}
                 </p>
               </div>
 
               <div className="rounded-[1.4rem] bg-[rgba(25,37,64,0.65)] px-5 py-4 text-sm text-[var(--on-surface-variant)] shadow-[0_18px_40px_rgba(0,0,0,0.14)]">
-                Most active lane: <span className="font-semibold text-white">Interview pipeline</span>
+                Most active lane: <span className="font-semibold text-white">{mostActiveLane}</span>
               </div>
             </section>
 
@@ -122,67 +222,78 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="grid gap-5 xl:grid-cols-2">
-                {applications.map((application) => (
-                  <SurfaceCard
-                    key={application.company}
-                    className={[
-                      "rounded-[1.75rem] bg-[var(--surface-container-high)] p-6 hover:bg-[var(--surface-container-highest)]",
-                      application.emphasized
-                        ? "bg-[linear-gradient(160deg,rgba(20,31,56,0.96),rgba(25,37,64,0.92))] shadow-[0_24px_60px_rgba(0,29,78,0.22)]"
-                        : "",
-                      application.faded ? "opacity-50" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.25rem] bg-[rgba(129,236,255,0.12)] text-[var(--primary)]">
-                          <Icon name={application.icon} className="text-[28px]" />
-                        </div>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <h3 className="font-headline text-2xl font-extrabold tracking-[-0.04em] text-white">
-                              {application.role}
-                            </h3>
-                            <span className="inline-flex items-center rounded-full bg-[rgba(110,155,255,0.14)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--secondary)]">
-                              {application.cv}
-                            </span>
+              {isLoading ? (
+                <div className="p-8 text-center text-[var(--on-surface-variant)]">Loading...</div>
+              ) : applications.length ? (
+                <div className="grid gap-5 xl:grid-cols-2">
+                  {applications.map((application) => (
+                    <SurfaceCard
+                      key={application.id}
+                      className={[
+                        "rounded-[1.75rem] bg-[var(--surface-container-high)] p-6 hover:bg-[var(--surface-container-highest)]",
+                        application.emphasized
+                          ? "bg-[linear-gradient(160deg,rgba(20,31,56,0.96),rgba(25,37,64,0.92))] shadow-[0_24px_60px_rgba(0,29,78,0.22)]"
+                          : "",
+                        application.faded ? "opacity-50" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.25rem] bg-[rgba(129,236,255,0.12)] text-[var(--primary)]">
+                            <Icon name={application.icon} className="text-[28px]" />
                           </div>
-                          <p className="mt-2 text-sm text-[var(--on-surface-variant)]">
-                            {application.company} · {application.location}
-                          </p>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <h3 className="font-headline text-2xl font-extrabold tracking-[-0.04em] text-white">
+                                {application.role}
+                              </h3>
+                              <span className="inline-flex items-center rounded-full bg-[rgba(110,155,255,0.14)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--secondary)]">
+                                {application.cvLabel}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--on-surface-variant)]">
+                              {application.company} · Added {application.createdLabel}
+                            </p>
+                          </div>
                         </div>
+
+                        <button
+                          type="button"
+                          className="rounded-full p-2 text-[var(--on-surface-variant)] transition hover:bg-white/5 hover:text-white"
+                          aria-label={`More actions for ${application.company}`}
+                        >
+                          <Icon name="more_vert" className="text-[20px]" />
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        className="rounded-full p-2 text-[var(--on-surface-variant)] transition hover:bg-white/5 hover:text-white"
-                        aria-label={`More actions for ${application.company}`}
-                      >
-                        <Icon name="more_vert" className="text-[20px]" />
-                      </button>
-                    </div>
-
-                    <div className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-4">
-                        <MatchRing value={application.match} size={78} />
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">
-                            Match score
-                          </div>
-                          <div className="mt-2 text-sm text-[var(--on-surface-variant)]">
-                            Tuned to emphasize roadmap ownership, technical fluency, and hiring-panel language.
+                      <div className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-4">
+                          <MatchRing value={application.matchScore} size={78} />
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">
+                              Match score
+                            </div>
+                            <div className="mt-2 text-sm text-[var(--on-surface-variant)]">
+                              {application.description}
+                            </div>
+                            <div className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]/80">
+                              {application.hasTailoredCv ? "Tailored CV ready" : "Using base CV"}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <StatusPill status={application.status} />
-                    </div>
-                  </SurfaceCard>
-                ))}
-              </div>
+                        <StatusPill status={application.statusLabel} />
+                      </div>
+                    </SurfaceCard>
+                  ))}
+                </div>
+              ) : (
+                <SurfaceCard className="rounded-[1.75rem] bg-[var(--surface-container-high)] p-10 text-center text-[var(--on-surface-variant)]">
+                  No applications yet.
+                </SurfaceCard>
+              )}
             </section>
           </div>
         </main>
