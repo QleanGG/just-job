@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
-  let response = NextResponse.redirect(new URL("/login", request.url));
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -13,14 +12,20 @@ export async function POST(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.redirect(new URL("/login", request.url));
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         },
       },
     }
   );
 
   await supabase.auth.signOut();
+
+  const response = NextResponse.redirect(new URL("/login", request.url), 302);
+
+  // Explicitly clear all Supabase auth cookies
+  const cookieOptions = { path: "/", expires: new Date(0), sameSite: "lax" as const };
+  response.cookies.set("sb-access-token", "", cookieOptions);
+  response.cookies.set("sb-refresh-token", "", cookieOptions);
+  response.cookies.set("supabase-auth-token", "", cookieOptions);
 
   return response;
 }
