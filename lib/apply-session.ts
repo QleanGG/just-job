@@ -22,45 +22,55 @@ function canUseSessionStorage() {
   return typeof window !== "undefined";
 }
 
+function readStoredApplySession(): Partial<ApplySession> | null {
+  if (!canUseSessionStorage()) {
+    return null;
+  }
+
+  const raw = sessionStorage.getItem(APPLY_SESSION_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as Partial<ApplySession>;
+  } catch {
+    return null;
+  }
+}
+
 export function readApplySession(): ApplySession {
   if (!canUseSessionStorage()) {
     return DEFAULT_APPLY_SESSION;
   }
 
   const selectedCvId = sessionStorage.getItem(SELECTED_CV_ID_KEY);
-  const raw = sessionStorage.getItem(APPLY_SESSION_KEY);
+  const stored = readStoredApplySession();
 
-  if (!raw) {
-    return {
-      ...DEFAULT_APPLY_SESSION,
-      selectedCvId: selectedCvId || DEFAULT_APPLY_SESSION.selectedCvId,
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<ApplySession>;
-
-    return {
-      ...DEFAULT_APPLY_SESSION,
-      ...parsed,
-      selectedCvId: parsed.selectedCvId ?? selectedCvId ?? DEFAULT_APPLY_SESSION.selectedCvId,
-    };
-  } catch {
-    return {
-      ...DEFAULT_APPLY_SESSION,
-      selectedCvId: selectedCvId || DEFAULT_APPLY_SESSION.selectedCvId,
-    };
-  }
+  return {
+    ...DEFAULT_APPLY_SESSION,
+    ...stored,
+    selectedCvId: stored?.selectedCvId ?? selectedCvId ?? DEFAULT_APPLY_SESSION.selectedCvId,
+  };
 }
 
 export function writeApplySession(updates: Partial<ApplySession>) {
+  const selectedCvId = canUseSessionStorage()
+    ? sessionStorage.getItem(SELECTED_CV_ID_KEY)
+    : DEFAULT_APPLY_SESSION.selectedCvId;
   const nextState = {
-    ...readApplySession(),
+    ...(readStoredApplySession() ?? {}),
     ...updates,
+  };
+  const resolvedState = {
+    ...DEFAULT_APPLY_SESSION,
+    ...nextState,
+    selectedCvId: nextState.selectedCvId ?? selectedCvId ?? DEFAULT_APPLY_SESSION.selectedCvId,
   };
 
   if (!canUseSessionStorage()) {
-    return nextState;
+    return resolvedState;
   }
 
   if (nextState.selectedCvId) {
@@ -70,5 +80,5 @@ export function writeApplySession(updates: Partial<ApplySession>) {
   }
 
   sessionStorage.setItem(APPLY_SESSION_KEY, JSON.stringify(nextState));
-  return nextState;
+  return resolvedState;
 }

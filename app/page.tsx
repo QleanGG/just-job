@@ -84,7 +84,7 @@ export default async function HomePage() {
               Sign In
             </Link>
             <Link
-              href="/apply/step1"
+              href="/apply"
               className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--primary-dim)] px-5 py-3 text-sm font-semibold text-[var(--on-primary)] shadow-[0_18px_40px_rgba(0,29,78,0.24)] transition hover:brightness-105"
             >
               Get Started
@@ -109,7 +109,7 @@ export default async function HomePage() {
                 like a deliberate system instead of a pile of tabs.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Link href="/apply/step1" className="primary-button min-w-[190px] rounded-full">
+                <Link href="/apply" className="primary-button min-w-[190px] rounded-full">
                   <Icon name="auto_awesome" className="text-[18px]" />
                   Start Tailoring
                 </Link>
@@ -349,7 +349,7 @@ export default async function HomePage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Link href="/apply/step1" className="primary-button rounded-full px-6">
+                <Link href="/apply" className="primary-button rounded-full px-6">
                   Build My First CV
                 </Link>
                 <Link

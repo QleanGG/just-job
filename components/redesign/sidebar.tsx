@@ -11,7 +11,7 @@ type SidebarActive = "dashboard" | "cvs" | "settings" | "cta";
 
 export function Sidebar({
   active,
-  ctaHref = "/apply/step1",
+  ctaHref = "/apply",
   ctaLabel = "New Application",
 }: {
   active: SidebarActive;

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { notFound } from "next/navigation";
 import DashboardBody from "@/components/DashboardBody";
 import CvsBody from "@/components/CvsBody";
 import ProfileBody from "@/components/ProfileBody";
@@ -26,6 +25,7 @@ export default function AppLayout() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const isProgrammaticScroll = useRef(false);
 
   // Sync active tab from pathname
@@ -46,7 +46,9 @@ export default function AppLayout() {
     if (updateRouter) {
       router.push(APP_TABS[idx].path, { scroll: false });
     }
-    setTimeout(() => { isProgrammaticScroll.current = false; }, 500);
+    setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 500);
   }
 
   function handleScroll() {
@@ -76,8 +78,14 @@ export default function AppLayout() {
     scrollToIndex(clamped);
   }
 
+  async function handleLogout() {
+    setIsSigningOut(true);
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-[var(--background)]">
+    <div className="flex h-screen flex-col bg-[var(--background)]">
       {/* Swipeable panels */}
       <div
         ref={containerRef}
@@ -85,7 +93,7 @@ export default function AppLayout() {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        className="flex flex-1 snap-x snap-mandatory overflow-x-auto pb-20 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]"
+        className="flex flex-1 snap-x snap-mandatory overflow-x-auto pb-32 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {PANELS.map(({ path, Component }) => (
@@ -100,40 +108,51 @@ export default function AppLayout() {
 
       {/* Bottom tab bar */}
       <nav className="glass-panel pb-safe fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[rgba(9,19,40,0.95)] lg:hidden">
-        <div className="mx-auto grid h-20 max-w-md grid-cols-3 gap-2 px-4">
-          {APP_TABS.map((tab, i) => {
-            const active = i === activeIndex;
-            return (
-              <button
-                key={tab.path}
-                type="button"
-                onClick={() => {
-                  setActiveIndex(i);
-                  scrollToIndex(i);
-                }}
-                className={`flex flex-col items-center justify-center gap-1.5 rounded-[1.1rem] px-2 py-2 transition-all ${
-                  active
-                    ? "bg-[#192540] text-[var(--primary)]"
-                    : "text-[#6d758c] active:scale-90"
-                }`}
-              >
-                <span
-                  className="material-symbols-outlined text-[22px] transition-all"
-                  style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}
-                >
-                  {tab.icon}
-                </span>
-                <span className="font-headline text-[10px] font-black uppercase tracking-[0.18em]">
-                  {tab.label}
-                </span>
-                <span
-                  className={`h-1 rounded-full bg-[var(--primary)] transition-all ${
-                    active ? "w-4 opacity-100" : "w-0 opacity-0"
+        <div className="mx-auto max-w-md px-4 pt-2">
+          <div className="grid h-20 grid-cols-3 gap-2">
+            {APP_TABS.map((tab, i) => {
+              const active = i === activeIndex;
+              return (
+                <button
+                  key={tab.path}
+                  type="button"
+                  onClick={() => {
+                    setActiveIndex(i);
+                    scrollToIndex(i);
+                  }}
+                  className={`flex flex-col items-center justify-center gap-1.5 rounded-[1.1rem] px-2 py-2 transition-all ${
+                    active
+                      ? "bg-[#192540] text-[var(--primary)]"
+                      : "text-[#6d758c] active:scale-90"
                   }`}
-                />
-              </button>
-            );
-          })}
+                >
+                  <span
+                    className="material-symbols-outlined text-[22px] transition-all"
+                    style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}
+                  >
+                    {tab.icon}
+                  </span>
+                  <span className="font-headline text-[10px] font-black uppercase tracking-[0.18em]">
+                    {tab.label}
+                  </span>
+                  <span
+                    className={`h-1 rounded-full bg-[var(--primary)] transition-all ${
+                      active ? "w-4 opacity-100" : "w-0 opacity-0"
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={isSigningOut}
+            className="flex w-full items-center justify-center gap-2 border-t border-white/8 py-3 text-sm font-semibold text-[var(--error)] transition hover:bg-[var(--error)]/10 disabled:opacity-60"
+          >
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+            {isSigningOut ? "Signing Out..." : "Sign Out"}
+          </button>
         </div>
       </nav>
     </div>
