@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase-browser";
 import { SurfaceCard } from "@/components/redesign/ui";
+import { Sidebar } from "@/components/redesign/sidebar";
 
 export default function ProfileBody() {
   const router = useRouter();
@@ -31,7 +32,8 @@ export default function ProfileBody() {
   const displayName = user?.full_name || user?.email || "Your Profile";
 
   return (
-    <div className="min-h-screen bg-[var(--background)] pt-16 text-[var(--on-surface)]">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
+      <Sidebar active="settings" />
       <div className="relative min-h-screen lg:pl-64">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_left,rgba(129,236,255,0.08),transparent_34rem)]" />
 

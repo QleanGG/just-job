@@ -1,7 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import MobileNav from "@/components/MobileNav";
 import { WizardBottomBar, WizardShell } from "@/components/redesign/wizard-shell";
 import { Icon, StepSegments, SurfaceCard } from "@/components/redesign/ui";
+import { useCVs } from "@/hooks/useCVs";
+import { DEFAULT_APPLY_SESSION, readApplySession, writeApplySession } from "@/lib/apply-session";
 
 const infoCards = [
   {
@@ -22,6 +28,28 @@ const infoCards = [
 ] as const;
 
 export default function ApplyStep2Page() {
+  const router = useRouter();
+  const { data: cvs } = useCVs();
+  const [selectedCvId, setSelectedCvId] = useState<string | null>(null);
+  const [jobTitle, setJobTitle] = useState(DEFAULT_APPLY_SESSION.jobTitle);
+  const [companyName, setCompanyName] = useState(DEFAULT_APPLY_SESSION.companyName);
+  const [jobDescription, setJobDescription] = useState(DEFAULT_APPLY_SESSION.jobDescription);
+
+  useEffect(() => {
+    const session = readApplySession();
+    if (!session.selectedCvId) {
+      router.replace("/apply/step1");
+      return;
+    }
+    setSelectedCvId(session.selectedCvId);
+    setJobTitle(session.jobTitle);
+    setCompanyName(session.companyName);
+    setJobDescription(session.jobDescription);
+  }, [router]);
+
+  const selectedCv = cvs?.find((cv) => cv.id === selectedCvId);
+  const selectedCvLabel = selectedCv?.display_name || selectedCv?.name || "Selected Base CV";
+
   return (
     <>
       <WizardShell
@@ -38,23 +66,59 @@ export default function ApplyStep2Page() {
           }
           center={<StepSegments current={2} />}
           right={
-            <Link href="/apply/step3" className="primary-button rounded-full px-6">
+            <button
+              onClick={() => {
+                writeApplySession({
+                  selectedCvId,
+                  jobTitle,
+                  companyName,
+                  jobDescription,
+                });
+                router.push("/apply/step3");
+              }}
+              className="primary-button rounded-full px-6"
+            >
               Next
               <Icon name="arrow_forward" className="text-[18px]" />
-            </Link>
+            </button>
           }
         />
       }
     >
       <div className="space-y-6">
+        <SurfaceCard className="rounded-[1.6rem] bg-[var(--surface-container-high)] p-5 hover:bg-[var(--surface-container-high)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--secondary)]">Selected Base CV</div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold text-white">{selectedCvLabel}</div>
+              <div className="mt-1 text-sm text-[var(--on-surface-variant)]">
+                Step 1 stored this CV in session storage for the rest of the wizard.
+              </div>
+            </div>
+            <Link href="/apply/step1" className="secondary-button rounded-full px-4 py-2">
+              Change
+            </Link>
+          </div>
+        </SurfaceCard>
+
         <div className="grid gap-5 lg:grid-cols-2">
           <label className="space-y-3">
             <span className="text-sm font-semibold text-white">Job Title</span>
-            <input className="input-shell w-full" defaultValue="Senior Product Manager, AI Platform" type="text" />
+            <input
+              className="input-shell w-full"
+              value={jobTitle}
+              onChange={(event) => setJobTitle(event.target.value)}
+              type="text"
+            />
           </label>
           <label className="space-y-3">
             <span className="text-sm font-semibold text-white">Company Name</span>
-            <input className="input-shell w-full" defaultValue="Northstar Systems" type="text" />
+            <input
+              className="input-shell w-full"
+              value={companyName}
+              onChange={(event) => setCompanyName(event.target.value)}
+              type="text"
+            />
           </label>
         </div>
 
@@ -62,7 +126,8 @@ export default function ApplyStep2Page() {
           <span className="text-sm font-semibold text-white">Job Description</span>
           <textarea
             className="input-shell min-h-[350px] w-full resize-none leading-7"
-            defaultValue="We are looking for a product leader to drive our AI platform roadmap, partner deeply with engineering, and turn enterprise customer feedback into durable product bets. You will work across data infrastructure, developer tooling, and applied AI experiences while aligning internal stakeholders around a clear operating plan."
+            value={jobDescription}
+            onChange={(event) => setJobDescription(event.target.value)}
           />
         </label>
 

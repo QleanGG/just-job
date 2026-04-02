@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import MobileNav from "@/components/MobileNav";
 import { WizardBottomBar, WizardShell } from "@/components/redesign/wizard-shell";
 import { Icon, MiniDocument, StepSegments, SurfaceCard } from "@/components/redesign/ui";
+import { useCVs } from "@/hooks/useCVs";
+import { DEFAULT_APPLY_SESSION, readApplySession } from "@/lib/apply-session";
 
 function GoogleMark() {
   return (
@@ -12,6 +17,26 @@ function GoogleMark() {
 }
 
 export default function ApplyStep4Page() {
+  const { data: cvs } = useCVs();
+  const [selectedCvId, setSelectedCvId] = useState<string | null>(null);
+  const [jobTitle, setJobTitle] = useState(DEFAULT_APPLY_SESSION.jobTitle);
+  const [companyName, setCompanyName] = useState(DEFAULT_APPLY_SESSION.companyName);
+  const [acceptedAt, setAcceptedAt] = useState<string | null>(DEFAULT_APPLY_SESSION.acceptedAt);
+
+  useEffect(() => {
+    const session = readApplySession();
+    if (!session.selectedCvId) {
+      return;
+    }
+    setSelectedCvId(session.selectedCvId);
+    setJobTitle(session.jobTitle);
+    setCompanyName(session.companyName);
+    setAcceptedAt(session.acceptedAt);
+  }, []);
+
+  const selectedCv = cvs?.find((cv) => cv.id === selectedCvId);
+  const selectedCvLabel = selectedCv?.display_name || selectedCv?.name || "Selected Base CV";
+
   return (
     <>
       <WizardShell
@@ -61,29 +86,20 @@ export default function ApplyStep4Page() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="rounded-[1.2rem] bg-[rgba(9,19,40,0.6)] p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">Role</div>
-                <div className="mt-2 font-semibold text-white">Senior Product Manager, AI Platform</div>
+                <div className="mt-2 font-semibold text-white">{jobTitle}</div>
               </div>
               <div className="rounded-[1.2rem] bg-[rgba(9,19,40,0.6)] p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">Company</div>
-                <div className="mt-2 font-semibold text-white">Northstar Systems</div>
+                <div className="mt-2 font-semibold text-white">{companyName}</div>
               </div>
               <div className="rounded-[1.2rem] bg-[rgba(9,19,40,0.6)] p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">Tone</div>
-                <div className="mt-2 font-semibold text-white">Technical, confident, enterprise-ready</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">Base CV</div>
+                <div className="mt-2 font-semibold text-white">{selectedCvLabel}</div>
               </div>
               <div className="rounded-[1.2rem] bg-[rgba(9,19,40,0.6)] p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">Skills</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[
-                    "AI Platform",
-                    "Roadmap Strategy",
-                    "Developer Tooling",
-                    "Enterprise Delivery",
-                  ].map((skill) => (
-                    <span key={skill} className="rounded-full bg-[rgba(110,155,255,0.14)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--secondary)]">
-                      {skill}
-                    </span>
-                  ))}
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">Accepted</div>
+                <div className="mt-2 font-semibold text-white">
+                  {acceptedAt ? new Date(acceptedAt).toLocaleString() : "Pending confirmation"}
                 </div>
               </div>
             </div>

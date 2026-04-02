@@ -1,7 +1,5 @@
-"use client";
-
-import CvsBody from "@/components/CvsBody";
-
+// The layout renders CvsBody directly.
+// This page file only exists to match the URL route.
 export default function CvsPage() {
-  return <CvsBody />;
+  return null;
 }

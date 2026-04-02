@@ -2,6 +2,8 @@
 
 import { useQueries } from "@tanstack/react-query";
 import { Icon, MatchRing, StatusPill, SurfaceCard } from "@/components/redesign/ui";
+import { Sidebar } from "@/components/redesign/sidebar";
+import { TopBar } from "@/components/redesign/topbar";
 import { useApplications } from "@/hooks/useApplications";
 import { useCVs } from "@/hooks/useCVs";
 import type { JobDetails } from "@/hooks/useJobs";
@@ -154,7 +156,9 @@ export default function DashboardBody() {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--background)] pt-16 text-[var(--on-surface)]">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
+      <Sidebar active="dashboard" />
+      <TopBar filterLabel="STAGE: ALL" searchPlaceholder="Search roles, companies, notes" />
       <div className="relative min-h-screen lg:pl-64">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_right,rgba(129,236,255,0.12),transparent_34rem)]" />
         <main className="relative px-4 pb-10 pt-8 sm:px-6 lg:px-8">

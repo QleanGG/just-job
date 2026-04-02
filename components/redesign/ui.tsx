@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
 
 export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -104,11 +104,16 @@ export function SectionTitle({
 export function SurfaceCard({
   className,
   children,
-}: {
+  ...props
+}: ComponentPropsWithoutRef<"div"> & {
   className?: string;
   children: ReactNode;
 }) {
-  return <div className={cn("surface-card ghost-border rounded-[1.5rem] p-6", className)}>{children}</div>;
+  return (
+    <div className={cn("surface-card ghost-border rounded-[1.5rem] p-6", className)} {...props}>
+      {children}
+    </div>
+  );
 }
 
 export function StatCard({

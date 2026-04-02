@@ -1,6 +1,8 @@
 "use client";
 
 import { Icon, MiniDocument, SurfaceCard } from "@/components/redesign/ui";
+import { Sidebar } from "@/components/redesign/sidebar";
+import { TopBar } from "@/components/redesign/topbar";
 import { useCVs } from "@/hooks/useCVs";
 import type { CV } from "@/lib/supabase";
 
@@ -43,7 +45,9 @@ export default function CvsBody() {
   const visibleArchive = archiveCvs.length ? archiveCvs : remainingCvs;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] pt-16 text-[var(--on-surface)]">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
+      <Sidebar active="cvs" />
+      <TopBar searchPlaceholder="Search CVs..." />
       <div className="relative min-h-screen lg:pl-64">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_left,rgba(110,155,255,0.14),transparent_34rem)]" />
         <main className="relative px-4 pb-10 pt-8 sm:px-6 lg:px-8">

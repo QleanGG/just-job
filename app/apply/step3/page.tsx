@@ -1,7 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import MobileNav from "@/components/MobileNav";
 import { WizardBottomBar, WizardShell } from "@/components/redesign/wizard-shell";
 import { Icon, StepSegments, SurfaceCard } from "@/components/redesign/ui";
+import { useCVs } from "@/hooks/useCVs";
+import { DEFAULT_APPLY_SESSION, readApplySession, writeApplySession } from "@/lib/apply-session";
 
 const competencies = [
   ["Platform Strategy", "Direct match"],
@@ -11,6 +17,28 @@ const competencies = [
 ] as const;
 
 export default function ApplyStep3Page() {
+  const router = useRouter();
+  const { data: cvs } = useCVs();
+  const [selectedCvId, setSelectedCvId] = useState<string | null>(null);
+  const [jobTitle, setJobTitle] = useState(DEFAULT_APPLY_SESSION.jobTitle);
+  const [companyName, setCompanyName] = useState(DEFAULT_APPLY_SESSION.companyName);
+  const [jobDescription, setJobDescription] = useState(DEFAULT_APPLY_SESSION.jobDescription);
+
+  useEffect(() => {
+    const session = readApplySession();
+    if (!session.selectedCvId) {
+      router.replace("/apply/step1");
+      return;
+    }
+    setSelectedCvId(session.selectedCvId);
+    setJobTitle(session.jobTitle);
+    setCompanyName(session.companyName);
+    setJobDescription(session.jobDescription);
+  }, [router]);
+
+  const selectedCv = cvs?.find((cv) => cv.id === selectedCvId);
+  const selectedCvLabel = selectedCv?.display_name || selectedCv?.name || "Selected Base CV";
+
   return (
     <>
       <WizardShell
@@ -20,10 +48,16 @@ export default function ApplyStep3Page() {
       bottomBar={
         <WizardBottomBar
           left={
-            <button type="button" className="secondary-button rounded-full px-6 py-3">
-              <Icon name="autorenew" className="text-[18px]" />
-              Regenerate
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href="/apply/step2" className="secondary-button rounded-full px-6 py-3">
+                <Icon name="arrow_back" className="text-[18px]" />
+                Back
+              </Link>
+              <button type="button" className="secondary-button rounded-full px-6 py-3">
+                <Icon name="autorenew" className="text-[18px]" />
+                Regenerate
+              </button>
+            </div>
           }
           center={<StepSegments current={3} />}
           right={
@@ -31,10 +65,23 @@ export default function ApplyStep3Page() {
               <button type="button" className="secondary-button rounded-full px-6 py-3">
                 Save as Draft
               </button>
-              <Link href="/apply/step4" className="primary-button rounded-full px-6">
+              <button
+                type="button"
+                onClick={() => {
+                  writeApplySession({
+                    selectedCvId,
+                    jobTitle,
+                    companyName,
+                    jobDescription,
+                    acceptedAt: new Date().toISOString(),
+                  });
+                  router.push("/apply/step4");
+                }}
+                className="primary-button rounded-full px-6"
+              >
                 Accept &amp; Continue
                 <Icon name="arrow_forward" className="text-[18px]" />
-              </Link>
+              </button>
             </>
           }
         />
@@ -42,6 +89,20 @@ export default function ApplyStep3Page() {
     >
       <div className="grid gap-6 xl:grid-cols-12">
         <div className="space-y-5 xl:col-span-4">
+          <SurfaceCard className="rounded-[1.75rem] bg-[var(--surface-container-high)] p-6 hover:bg-[var(--surface-container-high)]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--secondary)]">Current Inputs</div>
+            <div className="mt-5 space-y-3 text-sm text-[var(--on-surface-variant)]">
+              <div>
+                <div className="font-semibold text-white">{jobTitle}</div>
+                <div>{companyName}</div>
+              </div>
+              <div>
+                <div className="font-semibold text-white">{selectedCvLabel}</div>
+                <div>Stored from step 1 and reused for this draft preview.</div>
+              </div>
+            </div>
+          </SurfaceCard>
+
           <SurfaceCard className="rounded-[1.75rem] bg-[var(--surface-container-high)] p-6 hover:bg-[var(--surface-container-high)]">
             <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--secondary)]">Match score</div>
             <div className="mt-5 font-headline text-6xl font-extrabold tracking-[-0.06em] text-white">85%</div>
@@ -75,7 +136,7 @@ export default function ApplyStep3Page() {
               <span className="text-sm font-semibold uppercase tracking-[0.22em]">AI Tailor&apos;s Note</span>
             </div>
             <p className="mt-4 text-sm leading-7 text-[var(--on-surface)]">
-              I elevated your work with API programs and enterprise discovery because the brief repeatedly centers platform adoption, technical alignment, and roadmap ownership.
+              I elevated your work with API programs and enterprise discovery because the brief for {jobTitle} repeatedly centers platform adoption, technical alignment, and roadmap ownership.
             </p>
           </div>
         </div>
@@ -88,7 +149,7 @@ export default function ApplyStep3Page() {
                   <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">
                     Document Preview
                   </div>
-                  <div className="mt-1 font-semibold text-white">Executive Strategy Lead · Tailored Draft</div>
+                  <div className="mt-1 font-semibold text-white">{selectedCvLabel} · Tailored Draft</div>
                 </div>
                 <span className="rounded-full bg-[rgba(129,236,255,0.14)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">
                   Optimized
@@ -137,7 +198,8 @@ export default function ApplyStep3Page() {
                       <li>
                         Converted discovery into prioritization frameworks for
                         <span className="border-b border-[var(--primary)] bg-[var(--primary)]/20 px-1"> applied AI experiences</span>
-                        shipped to high-volume users.
+                        shipped to high-volume users relevant to {jobDescription.slice(0, 92)}
+                        {jobDescription.length > 92 ? "..." : ""}
                       </li>
                     </ul>
                   </section>

@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { getServerUser } from "@/lib/get-server-user";
 import { redirect } from "next/navigation";
 import MobileFAB from "@/components/MobileFAB";
 import MobileNav from "@/components/MobileNav";
-import { getServerUser } from "@/lib/get-server-user";
 import { AppLogo, Icon, SectionTitle, SurfaceCard } from "@/components/redesign/ui";
 
 const navItems = ["Features", "Pricing", "Resources"];
@@ -52,9 +52,7 @@ const footerGroups = [
 
 export default async function HomePage() {
   const user = await getServerUser();
-  if (user) {
-    redirect("/shell");
-  }
+  if (user) redirect("/dashboard");
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--background)] text-[var(--on-surface)]">
