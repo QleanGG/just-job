@@ -13,6 +13,8 @@ import {
   readApplySession,
   writeApplySession,
 } from "@/lib/apply-session";
+import type { CV } from "@/lib/supabase";
+import type { CVSection, KeywordAnalysisSummary, TailoredSection } from "@/lib/types";
 
 const infoCards = [
   {
@@ -38,6 +40,186 @@ const competencies = [
   ["Enterprise Delivery", "Mentioned 4x"],
   ["Developer Tooling", "Strong overlap"],
 ] as const;
+
+type TailoredPreviewSection = {
+  index: number;
+  title: string;
+  tailored: string;
+  changes: TailoredSection["changes"];
+};
+
+function getParsedSections(parsedSections: CV["parsed_sections"]): CVSection[] {
+  if (!Array.isArray(parsedSections)) {
+    return [];
+  }
+
+  return parsedSections
+    .map((section, index) => {
+      if (!section || typeof section !== "object") {
+        return null;
+      }
+
+      const candidate = section as Partial<CVSection>;
+
+      return {
+        type: candidate.type || "other",
+        title: candidate.title || `Section ${index + 1}`,
+        content: candidate.content || "",
+        originalIndex: typeof candidate.originalIndex === "number" ? candidate.originalIndex : index,
+      } as CVSection;
+    })
+    .filter((section): section is CVSection => Boolean(section));
+}
+
+function buildFallbackCvSections(selectedCvLabel: string): CVSection[] {
+  return [
+    {
+      type: "summary",
+      title: "Professional Summary",
+      content:
+        `The base CV "${selectedCvLabel}" is selected, but parsed summary content is unavailable. Preserve the original experience and rewrite only what exists.`,
+      originalIndex: 0,
+    },
+    {
+      type: "experience",
+      title: "Experience Highlights",
+      content:
+        "Experience bullets are unavailable in parsed CV data. Reframe only the candidate's existing product, enterprise, and technical work toward the role requirements.",
+      originalIndex: 1,
+    },
+    {
+      type: "skills",
+      title: "Skills",
+      content:
+        "Skills data is unavailable in parsed CV data. Prioritize only skills already present in the original CV and avoid inventing new competencies.",
+      originalIndex: 2,
+    },
+  ];
+}
+
+function buildCvSections(cv: CV | undefined, selectedCvLabel: string): CVSection[] {
+  const parsedSections = getParsedSections(cv?.parsed_sections);
+  const validSections = parsedSections.filter(
+    (section) => section.title.trim().length > 0 || section.content.trim().length > 0,
+  );
+
+  return validSections.length > 0 ? validSections : buildFallbackCvSections(selectedCvLabel);
+}
+
+function toPreviewSections(
+  apiSections: TailoredSection[] | null | undefined,
+  fallbackSections: CVSection[],
+): TailoredPreviewSection[] {
+  if (!apiSections?.length) {
+    return fallbackSections.map((section, index) => ({
+      index: section.originalIndex ?? index,
+      title: section.title,
+      tailored: section.content,
+      changes: [],
+    }));
+  }
+
+  return apiSections.map((section, index) => ({
+    index: typeof section.originalIndex === "number" ? section.originalIndex : index,
+    title: section.title || fallbackSections[index]?.title || `Section ${index + 1}`,
+    tailored: section.content || fallbackSections[index]?.content || "",
+    changes: Array.isArray(section.changes) ? section.changes : [],
+  }));
+}
+
+function calculateMatchScore(
+  sections: TailoredPreviewSection[],
+  keywordAnalysis: KeywordAnalysisSummary | null,
+) {
+  const totalChanges = sections.reduce((sum, section) => sum + section.changes.length, 0);
+  const matchedKeywords = keywordAnalysis?.matchedKeywords.length ?? 0;
+  const missedKeywords = keywordAnalysis?.missedKeywords.length ?? 0;
+  const overlapRatio =
+    matchedKeywords + missedKeywords > 0
+      ? matchedKeywords / (matchedKeywords + missedKeywords)
+      : 0.5;
+
+  return Math.max(72, Math.min(98, Math.round(72 + overlapRatio * 16 + Math.min(totalChanges, 5) * 3)));
+}
+
+function formatKeyword(keyword: string) {
+  return keyword
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getMatchedCompetencies(keywordAnalysis: KeywordAnalysisSummary | null) {
+  if (!keywordAnalysis?.matchedKeywords.length) {
+    return competencies;
+  }
+
+  const labels = ["Direct match", "Job signal", "Strong overlap", "High priority"] as const;
+
+  return keywordAnalysis.matchedKeywords.slice(0, 4).map((keyword, index) => [
+    formatKeyword(keyword),
+    labels[index % labels.length],
+  ]) as Array<readonly [string, string]>;
+}
+
+async function tailorCvPreview({
+  cvSections,
+  jobTitle,
+  companyName,
+  jobDescription,
+}: {
+  cvSections: CVSection[];
+  jobTitle: string;
+  companyName: string;
+  jobDescription: string;
+}) {
+  const response = await fetch("/api/cv/tailor", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cv: cvSections.map(({ title, content }) => ({ title, content })),
+      job: {
+        title: jobTitle,
+        company: companyName,
+        description: jobDescription,
+      },
+      jobId: null,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(error?.error || "Failed to tailor CV");
+  }
+
+  const data = (await response.json()) as {
+    keywordAnalysis?: KeywordAnalysisSummary | null;
+    sections?: Array<{
+      index?: number;
+      tailored?: string;
+      changes?: TailoredSection["changes"];
+    }>;
+    tailoredSections?: TailoredSection[];
+  };
+
+  if (Array.isArray(data.sections) && data.sections.length > 0) {
+    const previewSections = data.sections.map((section, index) => ({
+      index: typeof section.index === "number" ? section.index : index,
+      title: cvSections[index]?.title || `Section ${index + 1}`,
+      tailored: section.tailored || cvSections[index]?.content || "",
+      changes: Array.isArray(section.changes) ? section.changes : [],
+    }));
+
+    return {
+      sections: previewSections,
+      keywordAnalysis: data.keywordAnalysis || null,
+    };
+  }
+
+  return {
+    sections: toPreviewSections(data.tailoredSections, cvSections),
+    keywordAnalysis: data.keywordAnalysis || null,
+  };
+}
 
 function GoogleMark() {
   return (
@@ -83,6 +265,11 @@ export default function ApplyPage() {
   const [companyName, setCompanyName] = useState(DEFAULT_APPLY_SESSION.companyName);
   const [jobDescription, setJobDescription] = useState(DEFAULT_APPLY_SESSION.jobDescription);
   const [acceptedAt, setAcceptedAt] = useState<string | null>(DEFAULT_APPLY_SESSION.acceptedAt);
+  const [tailoredSections, setTailoredSections] = useState<TailoredPreviewSection[] | null>(null);
+  const [isTailoring, setIsTailoring] = useState(false);
+  const [matchScore, setMatchScore] = useState(85);
+  const [keywordAnalysis, setKeywordAnalysis] = useState<KeywordAnalysisSummary | null>(null);
+  const [tailorError, setTailorError] = useState<string | null>(null);
 
   useEffect(() => {
     const session = readApplySession();
@@ -121,6 +308,7 @@ export default function ApplyPage() {
   const selectedCvLabel = selectedCv?.display_name || selectedCv?.name || "Selected Base CV";
 
   function moveToStepOne() {
+    setTailorError(null);
     setCurrentStep(1);
   }
 
@@ -129,6 +317,10 @@ export default function ApplyPage() {
       return;
     }
 
+    setTailoredSections(null);
+    setKeywordAnalysis(null);
+    setTailorError(null);
+    setMatchScore(85);
     writeApplySession({
       selectedCvId,
       acceptedAt: null,
@@ -138,6 +330,10 @@ export default function ApplyPage() {
   }
 
   function moveToStepThree() {
+    setTailoredSections(null);
+    setKeywordAnalysis(null);
+    setTailorError(null);
+    setMatchScore(85);
     writeApplySession({
       selectedCvId,
       jobTitle,
@@ -174,6 +370,66 @@ export default function ApplyPage() {
     setAcceptedAt(null);
     setCurrentStep(3);
   }
+
+  const selectedCvSections = buildCvSections(selectedCv, selectedCvLabel);
+  const displayedCompetencies = getMatchedCompetencies(keywordAnalysis);
+  const totalTailorChanges =
+    tailoredSections?.reduce((sum, section) => sum + section.changes.length, 0) ?? 0;
+
+  async function handleTailorPreview() {
+    if (!selectedCvId || !selectedCv) {
+      return;
+    }
+
+    setIsTailoring(true);
+    setTailorError(null);
+
+    try {
+      const result = await tailorCvPreview({
+        cvSections: selectedCvSections,
+        jobTitle,
+        companyName,
+        jobDescription,
+      });
+
+      setTailoredSections(result.sections);
+      setKeywordAnalysis(result.keywordAnalysis);
+      setMatchScore(calculateMatchScore(result.sections, result.keywordAnalysis));
+    } catch (error) {
+      setTailorError(error instanceof Error ? error.message : "Failed to tailor CV");
+      setTailoredSections(null);
+      setKeywordAnalysis(null);
+      setMatchScore(85);
+    } finally {
+      setIsTailoring(false);
+    }
+  }
+
+  useEffect(() => {
+    if (
+      currentStep !== 3 ||
+      tailoredSections ||
+      isTailoring ||
+      tailorError ||
+      !selectedCvId ||
+      !selectedCv
+    ) {
+      return;
+    }
+
+    void handleTailorPreview();
+  }, [
+    currentStep,
+    tailoredSections,
+    isTailoring,
+    tailorError,
+    selectedCvId,
+    selectedCv,
+    selectedCvSections,
+    jobTitle,
+    companyName,
+    jobDescription,
+  ]);
 
   let title = "Choose Your CV";
   let description =
@@ -379,9 +635,14 @@ export default function ApplyPage() {
               <Icon name="arrow_back" className="text-[18px]" />
               Back
             </button>
-            <button type="button" className="secondary-button rounded-full px-6 py-3">
+            <button
+              type="button"
+              onClick={() => void handleTailorPreview()}
+              disabled={isTailoring || !selectedCvId}
+              className="secondary-button rounded-full px-6 py-3 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <Icon name="autorenew" className="text-[18px]" />
-              Regenerate
+              {isTailoring ? "Regenerating..." : "Regenerate"}
             </button>
           </div>
         }
@@ -427,11 +688,12 @@ export default function ApplyPage() {
               Match score
             </div>
             <div className="mt-5 font-headline text-6xl font-extrabold tracking-[-0.06em] text-white">
-              85%
+              {matchScore}%
             </div>
             <p className="mt-3 text-sm leading-6 text-[var(--on-surface-variant)]">
-              Strong alignment on AI roadmap leadership, enterprise collaboration, and technical
-              product depth.
+              {isTailoring
+                ? "Analyzing your base CV against the role requirements and rewriting each section."
+                : `Built from ${totalTailorChanges} tailored edits${keywordAnalysis?.matchedKeywords.length ? ` and ${keywordAnalysis.matchedKeywords.length} matched keywords` : ""}.`}
             </p>
           </SurfaceCard>
 
@@ -440,7 +702,7 @@ export default function ApplyPage() {
               Matched Competencies
             </h2>
             <div className="mt-5 space-y-4">
-              {competencies.map(([skill, badge]) => (
+              {displayedCompetencies.map(([skill, badge]) => (
                 <div
                   key={skill}
                   className="flex items-center justify-between gap-3 rounded-[1.2rem] bg-[rgba(9,19,40,0.6)] px-4 py-3"
@@ -467,9 +729,9 @@ export default function ApplyPage() {
               </span>
             </div>
             <p className="mt-4 text-sm leading-7 text-[var(--on-surface)]">
-              I elevated your work with API programs and enterprise discovery because the brief for{" "}
-              {jobTitle} repeatedly centers platform adoption, technical alignment, and roadmap
-              ownership.
+              {isTailoring
+                ? "Tailoring your CV..."
+                : `I rewrote ${selectedCvSections.length} sections for ${jobTitle} at ${companyName}, emphasizing the strongest overlap with the brief while keeping the draft anchored to your existing experience.`}
             </p>
           </div>
         </div>
@@ -508,61 +770,51 @@ export default function ApplyPage() {
               <div className="mx-auto max-w-3xl rounded-[1.75rem] bg-white p-8 text-[#101621] shadow-[0_24px_50px_rgba(16,22,33,0.12)]">
                 <div className="space-y-2 border-b border-slate-200 pb-5">
                   <div className="font-headline text-3xl font-extrabold tracking-[-0.05em]">
-                    Guy Guzman
+                    {selectedCvLabel}
                   </div>
                   <div className="text-sm text-slate-600">
-                    Product Manager · AI Platforms · Enterprise Systems
+                    Tailored for {jobTitle}
+                    {companyName ? ` · ${companyName}` : ""}
                   </div>
                 </div>
 
-                <div className="mt-6 space-y-6 text-sm leading-7 text-slate-700">
-                  <section>
-                    <div className="font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Profile
-                    </div>
-                    <p className="mt-3">
-                      Technical product manager with a record of leading
-                      <span className="border-b border-[var(--primary)] bg-[var(--primary)]/20 px-1">
-                        {" "}
-                        AI platform roadmaps
-                      </span>
-                      , enterprise programs, and data-heavy initiatives across cross-functional teams.
+                {isTailoring ? (
+                  <div className="flex min-h-[26rem] flex-col items-center justify-center gap-4 text-center text-slate-600">
+                    <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#4dd8f0] border-t-transparent" />
+                    <div className="font-semibold text-slate-800">Tailoring your CV...</div>
+                    <p className="max-w-md text-sm leading-6">
+                      The AI is rewriting your selected sections against the job brief and updating
+                      this preview in place.
                     </p>
-                  </section>
-
-                  <section>
-                    <div className="font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Recent Impact
+                  </div>
+                ) : tailorError ? (
+                  <div className="flex min-h-[26rem] flex-col items-center justify-center gap-4 text-center text-slate-600">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-[#b42318]">
+                      <Icon name="error" className="text-[20px]" />
                     </div>
-                    <ul className="mt-3 space-y-3 pl-5">
-                      <li>
-                        Directed a
-                        <span className="border-b border-[var(--primary)] bg-[var(--primary)]/20 px-1">
-                          {" "}
-                          developer tooling strategy
-                        </span>
-                        that improved adoption and reduced integration ambiguity for strategic accounts.
-                      </li>
-                      <li>
-                        Built feedback loops between customers, GTM, and engineering to keep
-                        <span className="border-b border-[var(--primary)] bg-[var(--primary)]/20 px-1">
-                          {" "}
-                          enterprise delivery
-                        </span>
-                        aligned with roadmap priorities.
-                      </li>
-                      <li>
-                        Converted discovery into prioritization frameworks for
-                        <span className="border-b border-[var(--primary)] bg-[var(--primary)]/20 px-1">
-                          {" "}
-                          applied AI experiences
-                        </span>
-                        shipped to high-volume users relevant to {jobDescription.slice(0, 92)}
-                        {jobDescription.length > 92 ? "..." : ""}
-                      </li>
-                    </ul>
-                  </section>
-                </div>
+                    <div className="font-semibold text-slate-800">Tailoring couldn&apos;t finish</div>
+                    <p className="max-w-md text-sm leading-6">{tailorError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleTailorPreview()}
+                      className="secondary-button rounded-full px-5 py-3"
+                    >
+                      <Icon name="autorenew" className="text-[18px]" />
+                      Try Again
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-6 space-y-6 text-sm leading-7 text-slate-700">
+                    {(tailoredSections || []).map((section) => (
+                      <section key={`${section.index}-${section.title}`}>
+                        <div className="font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          {section.title}
+                        </div>
+                        <div className="mt-3 whitespace-pre-line">{section.tailored}</div>
+                      </section>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

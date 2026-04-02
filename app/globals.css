@@ -26,7 +26,7 @@
   --surface-container-high: #141f38;
   --surface-container-highest: #192540;
   --surface-bright: #1f2b49;
-  --primary: #81ecff;
+  --primary: #4dd8f0;
   --primary-dim: #00d4ec;
   --secondary: #6e9bff;
   --on-surface: #dee5ff;
@@ -150,7 +150,7 @@ textarea {
 
   .primary-button {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold transition duration-200;
-    background-image: linear-gradient(135deg, var(--primary), var(--primary-dim));
+    background-image: linear-gradient(135deg, #4dd8f0, #00a8c4);
     color: var(--on-primary);
     box-shadow: 0 20px 40px var(--shadow-ambient);
   }
