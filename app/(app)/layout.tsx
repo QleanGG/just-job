@@ -28,12 +28,24 @@ export default function AppLayout() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const isProgrammaticScroll = useRef(false);
 
-  // Sync active tab from pathname
+  // Sync active tab from pathname AND scroll to the right panel
   useEffect(() => {
     const idx = APP_TABS.findIndex(
       (t) => t.path === pathname || (t.path !== "/" && pathname.startsWith(t.path)),
     );
-    if (idx !== -1) setActiveIndex(idx);
+    if (idx !== -1) {
+      setActiveIndex(idx);
+      // Scroll to the correct panel (use rAF to wait for layout)
+      requestAnimationFrame(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        const child = container.children[idx] as HTMLElement;
+        if (!child) return;
+        isProgrammaticScroll.current = true;
+        container.scrollTo({ left: child.offsetLeft, behavior: "instant" });
+        setTimeout(() => { isProgrammaticScroll.current = false; }, 300);
+      });
+    }
   }, [pathname]);
 
   function scrollToIndex(idx: number, updateRouter = true) {
@@ -93,7 +105,7 @@ export default function AppLayout() {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        className="flex flex-1 snap-x snap-mandatory overflow-x-auto pb-32 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]"
+        className="flex flex-1 snap-x snap-mandatory overflow-x-auto pb-20 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {PANELS.map(({ path, Component }) => (

@@ -1,10 +1,13 @@
+\"use client\";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AppLogo, Icon, cn } from "@/components/redesign/ui";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", key: "dashboard" },
   { href: "/cvs", label: "My CVs", icon: "description", key: "cvs" },
-  { href: "#", label: "Settings", icon: "settings", key: "settings" },
+  { href: "/profile", label: "Settings", icon: "settings", key: "settings" },
 ] as const;
 
 type SidebarActive = "dashboard" | "cvs" | "settings" | "cta";
@@ -18,6 +21,7 @@ export function Sidebar({
   ctaHref?: string;
   ctaLabel?: string;
 }) {
+  const pathname = usePathname();
   const ctaSelected = active === "cta";
 
   return (
@@ -41,7 +45,8 @@ export function Sidebar({
 
       <nav className="mt-10 space-y-2">
         {navItems.map((item) => {
-          const selected = item.key === active;
+          const selected =
+            pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
 
           return (
             <Link
