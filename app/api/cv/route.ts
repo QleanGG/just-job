@@ -17,8 +17,9 @@ function parseStoredSections(parsedSections: unknown) {
 }
 
 export async function GET(request: NextRequest) {
+  let response = NextResponse.next();
   try {
-    const user = await getServerUser();
+    const user = await getServerUser(request, response);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -41,14 +42,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(parsed);
   } catch (error) {
-    console.error("CV fetch error:", error);
+    console.error("GET /api/cv error:", error);
     return NextResponse.json({ error: "Failed to fetch CVs" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  let response = NextResponse.next();
   try {
-    const user = await getServerUser();
+    const user = await getServerUser(request, response);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -80,8 +82,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  let response = NextResponse.next();
   try {
-    const user = await getServerUser();
+    const user = await getServerUser(request, response);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

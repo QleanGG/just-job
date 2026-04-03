@@ -3,8 +3,9 @@ import { getJobs, createJob } from "@/lib/supabase";
 import { getServerUser } from "@/lib/get-server-user";
 
 export async function GET(request: NextRequest) {
+  let response = NextResponse.next();
   try {
-    const user = await getServerUser();
+    const user = await getServerUser(request, response);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
     const jobs = await getJobs(limit, user.id);
     return NextResponse.json(jobs);
   } catch (error) {
+    console.error("GET /api/jobs error:", error);
     return NextResponse.json({ error: "Failed to fetch jobs" }, { status: 500 });
   }
 }
