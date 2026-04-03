@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase-browser";
 import { AppLogo, Icon, cn } from "@/components/redesign/ui";
 
 const navItems = [
@@ -22,7 +24,12 @@ export function Sidebar({
   ctaLabel?: string;
 }) {
   const pathname = usePathname();
+  const [user, setUser] = useState<{ email?: string } | null>(null);
   const ctaSelected = active === "cta";
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-[rgba(64,72,93,0.15)] bg-[rgba(9,19,40,0.96)] px-4 py-8 lg:flex">
@@ -81,13 +88,27 @@ export function Sidebar({
           </div>
         </div>
 
-        <Link
-          className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-[var(--on-surface-variant)] transition hover:bg-[rgba(25,37,64,0.45)] hover:text-[var(--on-surface)]"
-          href="/login"
-        >
-          <Icon className="text-[18px]" name="logout" />
-          Sign In
-        </Link>
+        {user ? (
+          <button
+            type="button"
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              window.location.href = "/login";
+            }}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-[var(--on-surface-variant)] transition hover:bg-[rgba(25,37,64,0.45)] hover:text-[var(--on-surface)]"
+          >
+            <Icon className="text-[18px]" name="logout" />
+            Sign Out
+          </button>
+        ) : (
+          <Link
+            className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-[var(--on-surface-variant)] transition hover:bg-[rgba(25,37,64,0.45)] hover:text-[var(--on-surface)]"
+            href="/login"
+          >
+            <Icon className="text-[18px]" name="login" />
+            Sign In
+          </Link>
+        )}
       </div>
     </aside>
   );
