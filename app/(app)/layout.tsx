@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import DashboardBody from "@/components/DashboardBody";
 import CvsBody from "@/components/CvsBody";
 import ProfileBody from "@/components/ProfileBody";
@@ -27,6 +28,14 @@ export default function AppLayout() {
   const [isDragging, setIsDragging] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const isProgrammaticScroll = useRef(false);
+
+  // Show welcome toast on OAuth login
+  useEffect(() => {
+    if (document.cookie.includes("just_logged_in=true")) {
+      document.cookie = "just_logged_in=; Max-Age=0; path=/";
+      toast.success("Welcome back! Ready to tailor your next opportunity.");
+    }
+  }, []);
 
   // Sync active tab from pathname AND scroll to the right panel
   useEffect(() => {

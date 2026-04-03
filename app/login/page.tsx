@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase-browser";
 
@@ -86,6 +87,7 @@ function LoginPageContent() {
         return;
       }
 
+      toast.success("Welcome back! Ready to tailor your next opportunity.");
       router.push(from);
       router.refresh();
     } catch {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase-browser";
+import toast from "react-hot-toast";
 import { AppLogo, Icon, cn } from "@/components/redesign/ui";
 
 const navItems = [
@@ -93,6 +94,7 @@ export function Sidebar({
             type="button"
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
+              toast.success("You\'ve been signed out. See you next time!");
               window.location.href = "/login";
             }}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-[var(--on-surface-variant)] transition hover:bg-[rgba(25,37,64,0.45)] hover:text-[var(--on-surface)]"

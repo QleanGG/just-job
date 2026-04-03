@@ -28,5 +28,8 @@ export async function GET(request: NextRequest) {
 
   await supabase.auth.exchangeCodeForSession(code);
 
+  // Signal to the destination page that a login just occurred
+  response.cookies.set("just_logged_in", "true", { maxAge: 10, path: "/" });
+
   return response;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
 import QueryProvider from "@/components/QueryProvider";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -42,6 +43,23 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${manrope.variable} antialiased`}>
         <QueryProvider>{children}</QueryProvider>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "rgba(15,25,48,0.95)",
+              color: "#fff",
+              border: "1px solid rgba(129,236,255,0.2)",
+              borderRadius: "1rem",
+              fontSize: "14px",
+              fontWeight: 500,
+              backdropFilter: "blur(12px)",
+            },
+            success: {
+              iconTheme: { primary: "#00d4ec", secondary: "#fff" },
+            },
+          }}
+        />
       </body>
     </html>
   );
