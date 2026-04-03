@@ -97,7 +97,7 @@ export function Sidebar({
               toast.success("You\'ve been signed out. See you next time!");
               window.location.href = "/login";
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-[var(--on-surface-variant)] transition hover:bg-[rgba(25,37,64,0.45)] hover:text-[var(--on-surface)]"
+            className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm text-[var(--on-surface-variant)] transition hover:bg-[rgba(25,37,64,0.45)] hover:text-[var(--on-surface)]"
           >
             <Icon className="text-[18px]" name="logout" />
             Sign Out
