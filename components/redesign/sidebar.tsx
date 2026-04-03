@@ -1,4 +1,4 @@
-\"use client\";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -46,7 +46,7 @@ export function Sidebar({
       <nav className="mt-10 space-y-2">
         {navItems.map((item) => {
           const selected =
-            pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <Link
