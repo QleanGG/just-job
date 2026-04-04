@@ -1,5 +1,9 @@
 "use client";
 
+import { useRef, useState, type ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { Icon, MiniDocument, SurfaceCard } from "@/components/redesign/ui";
 import { Sidebar } from "@/components/redesign/sidebar";
 import { TopBar } from "@/components/redesign/topbar";
@@ -31,7 +35,13 @@ function GoogleMark() {
 }
 
 export default function CvsBody() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: cvs = [], isLoading } = useCVs();
+  const [isUploading, setIsUploading] = useState(false);
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const archiveTableRef = useRef<HTMLDivElement | null>(null);
 
   const sortedCvs = [...cvs].sort(
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
@@ -43,6 +53,111 @@ export default function CvsBody() {
   const remainingCvs = sortedCvs.filter((cv) => cv.id !== activeBase?.id);
   const archiveCvs = remainingCvs.filter((cv) => isOlderThanThirtyDays(cv.updated_at));
   const visibleArchive = archiveCvs.length ? archiveCvs : remainingCvs;
+  const historyRows = showAllHistory ? visibleArchive : visibleArchive.slice(0, 3);
+  const hasMoreHistory = visibleArchive.length > 3;
+
+  const handleUploadCv = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setIsUploading(true);
+
+    try {
+      const response = await fetch("/api/cv", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to upload CV");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["cvs"] });
+      toast.success("CV uploaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload CV");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleGoogleDocsClick = () => {
+    toast((toastInstance) => (
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-slate-900">Connect Google Docs in Settings.</span>
+        <button
+          type="button"
+          onClick={() => {
+            toast.dismiss(toastInstance.id);
+            router.push("/profile");
+          }}
+          className="text-sm font-semibold text-sky-600 transition hover:text-sky-700"
+        >
+          Open settings
+        </button>
+      </div>
+    ));
+  };
+
+  const handleCreateEmptyTemplate = async () => {
+    const providedName = window.prompt("Template name", "New Template");
+    if (providedName === null) {
+      return;
+    }
+
+    const templateName = providedName.trim() || "New Template";
+    setIsCreatingTemplate(true);
+
+    try {
+      const response = await fetch("/api/cv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          name: templateName,
+          docUrl: null,
+          parsedSections: [],
+          isPreset: false,
+          displayName: templateName,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to create template");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["cvs"] });
+      toast.success(`Created "${templateName}".`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create template");
+    } finally {
+      setIsCreatingTemplate(false);
+    }
+  };
+
+  const handleViewAllHistory = () => {
+    if (hasMoreHistory && !showAllHistory) {
+      setShowAllHistory(true);
+      window.requestAnimationFrame(() => {
+        archiveTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+
+    archiveTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (hasMoreHistory && showAllHistory) {
+      setShowAllHistory(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--on-surface)]">
@@ -66,15 +181,23 @@ export default function CvsBody() {
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
+                <label
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[rgba(25,37,64,0.7)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[rgba(25,37,64,0.92)]"
+                  aria-disabled={isUploading}
                 >
                   <Icon name="cloud_upload" className="text-[18px] text-[var(--primary)]" />
-                  Upload CV
-                </button>
+                  {isUploading ? "Uploading..." : "Upload CV"}
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc"
+                    className="hidden"
+                    onChange={handleUploadCv}
+                    disabled={isUploading}
+                  />
+                </label>
                 <button
                   type="button"
+                  onClick={handleGoogleDocsClick}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[rgba(25,37,64,0.7)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[rgba(25,37,64,0.92)]"
                 >
                   <GoogleMark />
@@ -164,17 +287,24 @@ export default function CvsBody() {
                     </SurfaceCard>
                   ))}
 
-                  <div className="flex min-h-[22rem] items-center justify-center rounded-[1.75rem] border border-dashed border-white/15 bg-[rgba(9,19,40,0.5)] p-6 text-center xl:col-span-1">
+                  <button
+                    type="button"
+                    onClick={handleCreateEmptyTemplate}
+                    disabled={isCreatingTemplate}
+                    className="flex min-h-[22rem] w-full items-center justify-center rounded-[1.75rem] border border-dashed border-white/15 bg-[rgba(9,19,40,0.5)] p-6 text-center transition hover:border-white/25 hover:bg-[rgba(9,19,40,0.62)] disabled:cursor-not-allowed disabled:opacity-60 xl:col-span-1"
+                  >
                     <div className="max-w-xs">
                       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-[rgba(129,236,255,0.12)] text-[var(--primary)]">
                         <Icon name="add" className="text-[30px]" />
                       </div>
-                      <h3 className="mt-5 font-headline text-2xl font-extrabold tracking-[-0.04em] text-white">Create Empty Template</h3>
+                      <h3 className="mt-5 font-headline text-2xl font-extrabold tracking-[-0.04em] text-white">
+                        {isCreatingTemplate ? "Creating Template..." : "Create Empty Template"}
+                      </h3>
                       <p className="mt-3 text-sm leading-6 text-[var(--on-surface-variant)]">
                         Start from a blank canvas when you need a new story architecture for a different role family.
                       </p>
                     </div>
-                  </div>
+                  </button>
                 </section>
 
                 <section className="rounded-[1.9rem] bg-[var(--surface-container-high)] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
@@ -187,13 +317,14 @@ export default function CvsBody() {
                     </div>
                     <button
                       type="button"
+                      onClick={handleViewAllHistory}
                       className="inline-flex rounded-full bg-[rgba(25,37,64,0.78)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--primary)] transition hover:bg-[rgba(25,37,64,0.94)]"
                     >
-                      View all history
+                      {hasMoreHistory && showAllHistory ? "Show recent history" : "View all history"}
                     </button>
                   </div>
 
-                  <div className="mt-6 overflow-x-auto">
+                  <div ref={archiveTableRef} className="mt-6 overflow-x-auto">
                     <table className="min-w-full text-left text-sm">
                       <thead>
                         <tr className="border-b border-white/8 text-[11px] uppercase tracking-[0.24em] text-[var(--on-surface-variant)]">
@@ -205,7 +336,7 @@ export default function CvsBody() {
                       </thead>
                       <tbody>
                         {visibleArchive.length ? (
-                          visibleArchive.map((cv) => (
+                          historyRows.map((cv) => (
                             <tr key={cv.id} className="border-b border-white/6 last:border-b-0">
                               <td className="py-4 pr-4 font-medium text-white">{getCvTitle(cv)}</td>
                               <td className="py-4 pr-4 text-[var(--on-surface-variant)]">

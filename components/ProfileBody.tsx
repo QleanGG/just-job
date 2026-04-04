@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase-browser";
+import toast from "react-hot-toast";
 import { SurfaceCard } from "@/components/redesign/ui";
 import { Sidebar } from "@/components/redesign/sidebar";
 
@@ -82,6 +83,7 @@ export default function ProfileBody() {
                   <div className="divide-y divide-white/6">
                     <button
                       type="button"
+                      onClick={() => toast("Settings coming soon")}
                       className="flex w-full items-center gap-4 rounded-[1.4rem] p-5 text-left transition hover:bg-[var(--surface-container-highest)]"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(129,236,255,0.1)] text-[var(--primary)]">
@@ -96,6 +98,7 @@ export default function ProfileBody() {
 
                     <button
                       type="button"
+                      onClick={() => toast("Coming soon")}
                       className="flex w-full items-center gap-4 rounded-[1.4rem] p-5 text-left transition hover:bg-[var(--surface-container-highest)]"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(129,236,255,0.1)] text-[var(--primary)]">
@@ -110,6 +113,7 @@ export default function ProfileBody() {
 
                     <button
                       type="button"
+                      onClick={() => toast("Coming soon")}
                       className="flex w-full items-center gap-4 rounded-[1.4rem] p-5 text-left transition hover:bg-[var(--surface-container-highest)]"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(129,236,255,0.1)] text-[var(--primary)]">
