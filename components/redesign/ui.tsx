@@ -184,13 +184,15 @@ export function MatchRing({
 export function StatusPill({
   status,
 }: {
-  status: "Applied" | "Interview" | "Offer" | "Rejected";
+  status: "Not Applied" | "Applied" | "Interview" | "Offer" | "Rejected" | "Withdrawn";
 }) {
   const tone = {
+    "Not Applied": "bg-[rgba(64,72,93,0.28)] text-[var(--on-surface-variant)]",
     Applied: "bg-[rgba(110,155,255,0.14)] text-[var(--secondary)]",
     Interview: "bg-[rgba(129,236,255,0.14)] text-[var(--primary)]",
     Offer: "bg-[rgba(129,236,255,0.18)] text-[var(--primary)]",
     Rejected: "bg-[rgba(255,113,108,0.12)] text-[var(--error)]",
+    Withdrawn: "bg-[rgba(64,72,93,0.28)] text-[var(--on-surface-variant)]",
   }[status];
 
   return (
